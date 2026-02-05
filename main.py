@@ -24,7 +24,7 @@ def run_parser(pdf_path: str, parser_type: str):
 
     elif parser_type == "pymupdf":
         md_pages, _ = extract_with_layout(pdf_path)
-        return "\n\n".join([page["text"] for page in md_pages])
+        return md_pages
 
     else:
         raise ValueError(f"Unknown parser type: {parser_type}")
