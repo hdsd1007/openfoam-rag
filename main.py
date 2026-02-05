@@ -40,7 +40,7 @@ def main():
     # ensure src imports work in Colab / terminal
     sys.path.append(".")
 
-    from src.utils.stats import generate_chunk_stats, sample_chunk
+    from src.utils.stats import generate_chunk_stats, sample_chunks_for_audit
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--parser", required=True, choices=["marker", "docling", "pymupdf"])
@@ -84,7 +84,7 @@ def main():
     if args.audit:
         print("\n📊 Running Chunk Audit...\n")
         generate_chunk_stats(all_processed_chunks)
-        sample_chunk(all_processed_chunks, sample_size=5)
+        sample_chunks_for_audit(all_processed_chunks, sample_size=5)
 
     with open(args.out, "w", encoding="utf-8") as f:
         json.dump(all_processed_chunks, f, indent=2, ensure_ascii=False)

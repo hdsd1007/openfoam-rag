@@ -5,7 +5,7 @@ from langchain_community.llms import HuggingFacePipeline
 
 def load_judge_llm():
 
-    model_id = "mistralai/Mistral-7B-Instruct-v0.2"
+    model_id = "HuggingFaceTB/SmolLM3-3B"
 
     tokenizer = AutoTokenizer.from_pretrained(model_id)
 
