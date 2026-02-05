@@ -6,7 +6,6 @@ from pathlib import Path
 
 # Parsers
 from src.parsers.markerParser import extract_high_fidelity_math
-from src.parsers.doclingParser import converter as docling_converter
 from src.parsers.pymupdfParser import extract_with_layout
 from src.vectorstore.build_db import build_vector_db
 
