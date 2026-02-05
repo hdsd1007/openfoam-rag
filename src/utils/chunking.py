@@ -12,13 +12,12 @@ def _get_headers(parser_type: str):
     if parser_type == "docling":
         return [("##", "Section")]
     elif parser_type == "pymupdf":
-        return [("###", "Section"), ("####", "Subsection")]
+        return [("###", "Section"), ("#####", "Subsection")]
     else:  # marker
         return [
             ("#", "Section"),
             ("##", "Subsection"),
-            ("###", "Subsubsection"),
-            ("####", "Subsubsubsection"),
+            ("####", "Subsubsection"),
         ]
 
 
