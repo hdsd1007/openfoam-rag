@@ -1,5 +1,5 @@
 docling
-pymupdf4llms
+pymupdf4llm
 marker-pdf 
 langchain-text-splitters 
 sentence-transformers 
