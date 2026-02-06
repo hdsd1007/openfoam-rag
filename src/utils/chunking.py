@@ -82,6 +82,8 @@ def get_adaptive_chunks(
                     split_texts = recursive_splitter.split_text(content)
 
                 for chunk_text in split_texts:
+                    section_name = sect.metadata.get("Section", "N/A")
+                    subsection_name = sect.metadata.get("Subsection", "N/A")
                     final_chunks.append(
                         {
                             "text": chunk_text,
@@ -90,6 +92,8 @@ def get_adaptive_chunks(
                                 "source": filename,
                                 "parser": parser_type,
                                 "page": page_number,  # structural page number
+                                "section": section_name,
+                                "sub_section":subsection_name,
                                 "word_count": len(chunk_text.split()),
                                 "token_count": len(enc.encode(chunk_text)),
                             },
@@ -118,6 +122,8 @@ def get_adaptive_chunks(
                 split_texts = recursive_splitter.split_text(content)
 
             for chunk_text in split_texts:
+                section_name = sect.metadata.get("Section", "N/A")
+                subsection_name = sect.metadata.get("Subsection", "N/A")
                 final_chunks.append(
                     {
                         "text": chunk_text,
@@ -126,6 +132,8 @@ def get_adaptive_chunks(
                             "source": filename,
                             "parser": parser_type,
                             "page": _extract_page(chunk_text, parser_type),  # restored
+                            "section": section_name,
+                            "sub_section": subsection_name,
                             "word_count": len(chunk_text.split()),
                             "token_count": len(enc.encode(chunk_text)),
                         },
