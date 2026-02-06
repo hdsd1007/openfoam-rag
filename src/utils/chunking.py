@@ -1,17 +1,26 @@
 import re
 import tiktoken
-from typing import List, Dict
+from typing import List, Dict, Union
 from langchain_text_splitters import MarkdownHeaderTextSplitter, RecursiveCharacterTextSplitter
 
 
-# -----------------------------
-# Parser-specific header config
-# -----------------------------
+# --------------------------------------------------
+# Header configuration per parser
+# --------------------------------------------------
 def _get_headers(parser_type: str):
     if parser_type == "docling":
-        return [("##", "Section")]
+        return [
+            ("#", "Section"),
+            ("##", "Subsection"),
+            ("###", "Subsubsection"),
+        ]
+
     elif parser_type == "pymupdf":
-        return [("###", "Section"), ("#####", "Subsection")]
+        return [
+            ("###", "Section"),
+            ("#####", "Subsection"),
+        ]
+
     else:  # marker
         return [
             ("#", "Section"),
@@ -20,22 +29,33 @@ def _get_headers(parser_type: str):
         ]
 
 
-# -----------------------------
-# Page extraction (ONLY for marker)
-# -----------------------------
+# --------------------------------------------------
+# Page extraction per parser
+# --------------------------------------------------
 def _extract_page(content: str, parser_type: str) -> str:
     if parser_type == "marker":
         match = re.search(r'id="page-(\d+)', content)
         return match.group(1) if match else "N/A"
 
-    return "Virtual Page"
+    if parser_type == "docling":
+        match = re.search(r'--- Page (\d+) ---', content)
+        return match.group(1) if match else "N/A"
+
+    return "N/A"
 
 
-# -----------------------------
+# --------------------------------------------------
+# Remove page markers (Docling only)
+# --------------------------------------------------
+def _clean_docling_page_markers(text: str):
+    return re.sub(r'--- Page \d+ ---', '', text)
+
+
+# --------------------------------------------------
 # Main Chunking Function
-# -----------------------------
+# --------------------------------------------------
 def get_adaptive_chunks(
-    full_md,
+    full_md: Union[str, List[Dict]],
     filename: str,
     parser_type: str,
     max_tokens: int = 800,
@@ -56,9 +76,9 @@ def get_adaptive_chunks(
 
     final_chunks = []
 
-    # --------------------------------------------------
-    # CASE 1: PYMUPDF (list of page dicts)
-    # --------------------------------------------------
+    # ==================================================
+    # CASE 1 — PyMuPDF (List of page dictionaries)
+    # ==================================================
     if parser_type == "pymupdf":
 
         for page_number, page_dict in enumerate(full_md, start=1):
@@ -76,14 +96,13 @@ def get_adaptive_chunks(
 
                 token_count = len(enc.encode(content))
 
-                if token_count <= max_tokens:
-                    split_texts = [content]
-                else:
-                    split_texts = recursive_splitter.split_text(content)
+                split_texts = (
+                    [content]
+                    if token_count <= max_tokens
+                    else recursive_splitter.split_text(content)
+                )
 
                 for chunk_text in split_texts:
-                    section_name = sect.metadata.get("Section", "N/A")
-                    subsection_name = sect.metadata.get("Subsection", "N/A")
                     final_chunks.append(
                         {
                             "text": chunk_text,
@@ -91,9 +110,10 @@ def get_adaptive_chunks(
                                 **sect.metadata,
                                 "source": filename,
                                 "parser": parser_type,
-                                "page": page_number,  # structural page number
-                                "section": section_name,
-                                "sub_section":subsection_name,
+                                "page": page_number,
+                                "section": sect.metadata.get("Section", "N/A"),
+                                "subsection": sect.metadata.get("Subsection", "N/A"),
+                                "subsubsection": sect.metadata.get("Subsubsection", "N/A"),
                                 "word_count": len(chunk_text.split()),
                                 "token_count": len(enc.encode(chunk_text)),
                             },
@@ -102,10 +122,18 @@ def get_adaptive_chunks(
 
         return final_chunks
 
-    # --------------------------------------------------
-    # CASE 2: MARKER / DOCLING (string input)
-    # --------------------------------------------------
+
+    # ==================================================
+    # CASE 2 — Docling & Marker (Single Markdown String)
+    # ==================================================
     else:
+
+        if parser_type == "docling":
+            # Extract page before cleaning
+            page_markers = list(re.finditer(r'--- Page (\d+) ---', full_md))
+            current_page = "1"
+        else:
+            current_page = "N/A"
 
         sections = header_splitter.split_text(full_md)
 
@@ -114,16 +142,26 @@ def get_adaptive_chunks(
             if not content:
                 continue
 
+            # --- Page handling ---
+            if parser_type == "docling":
+                page_match = re.search(r'--- Page (\d+) ---', content)
+                if page_match:
+                    current_page = page_match.group(1)
+
+                content = _clean_docling_page_markers(content)
+
+            elif parser_type == "marker":
+                current_page = _extract_page(content, "marker")
+
             token_count = len(enc.encode(content))
 
-            if token_count <= max_tokens:
-                split_texts = [content]
-            else:
-                split_texts = recursive_splitter.split_text(content)
+            split_texts = (
+                [content]
+                if token_count <= max_tokens
+                else recursive_splitter.split_text(content)
+            )
 
             for chunk_text in split_texts:
-                section_name = sect.metadata.get("Section", "N/A")
-                subsection_name = sect.metadata.get("Subsection", "N/A")
                 final_chunks.append(
                     {
                         "text": chunk_text,
@@ -131,9 +169,10 @@ def get_adaptive_chunks(
                             **sect.metadata,
                             "source": filename,
                             "parser": parser_type,
-                            "page": _extract_page(chunk_text, parser_type),  # restored
-                            "section": section_name,
-                            "sub_section": subsection_name,
+                            "page": current_page,
+                            "section": sect.metadata.get("Section", "N/A"),
+                            "subsection": sect.metadata.get("Subsection", "N/A"),
+                            "subsubsection": sect.metadata.get("Subsubsection", "N/A"),
                             "word_count": len(chunk_text.split()),
                             "token_count": len(enc.encode(chunk_text)),
                         },
