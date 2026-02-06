@@ -22,3 +22,15 @@ converter = DocumentConverter(
         InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)
     }
 )
+
+def extract_with_docling(pdf_path: str) -> str:
+    """
+    Parses a PDF using Docling and returns clean Markdown text.
+    """
+
+    result = converter.convert(pdf_path)
+
+    # Export structured document to markdown
+    markdown_text = result.document.export_to_markdown()
+
+    return markdown_text

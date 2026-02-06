@@ -7,6 +7,7 @@ from pathlib import Path
 # Parsers
 from src.parsers.markerParser import extract_high_fidelity_math
 from src.parsers.pymupdfParser import extract_with_layout
+from src.parsers.doclingParser import extract_with_docling
 from src.vectorstore.build_db import build_vector_db
 
 
@@ -19,8 +20,7 @@ def run_parser(pdf_path: str, parser_type: str):
         return extract_high_fidelity_math(pdf_path)
 
     elif parser_type == "docling":
-        result = docling_converter.convert(pdf_path)
-        return result.document.export_to_markdown()
+        return extract_with_docling(pdf_path)
 
     elif parser_type == "pymupdf":
         md_pages, _ = extract_with_layout(pdf_path)
