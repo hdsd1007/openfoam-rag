@@ -3,7 +3,7 @@ from docling.document_converter import DocumentConverter, PdfFormatOption
 from docling.datamodel.pipeline_options import PdfPipelineOptions
 from docling.datamodel.base_models import InputFormat
 
-def process_openfoam_guide(file_path):
+def extract_with_docling(file_path):
     # 1. Pipeline: Enable LaTeX formula extraction
     pipeline_options = PdfPipelineOptions()
     pipeline_options.do_ocr = False
