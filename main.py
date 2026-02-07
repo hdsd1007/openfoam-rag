@@ -65,6 +65,13 @@ def main():
         raise ValueError("No PDFs found.")
 
     for pdf_path in pdf_files:
+        if (
+            args.parser == "docling"
+            and pdf_path.name == "OpenFOAMUserGuide-v13.pdf"
+        ):
+            print(f"\n Skipping {pdf_path.name} (Docling incompatibility)")
+            continue
+        
         print(f"\n🔍 Processing: {pdf_path.name}")
 
         full_md = run_parser(str(pdf_path), args.parser)
