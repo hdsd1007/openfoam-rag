@@ -7,7 +7,7 @@ def ask_openfoam(query, vector_db, llm, return_context=False):
 
     retriever = vector_db.as_retriever(search_kwargs={"k": 5})
     
-    docs = retriever.get_relevant_documents(query)
+    docs = retriever.invoke(query)
     context_text = "\n\n".join([d.page_content for d in docs])
 
     template = """
