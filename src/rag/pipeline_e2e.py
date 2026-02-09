@@ -17,26 +17,29 @@ Answer the question using ONLY the provided context.
 
 STRICT RULES:
 
-1. Do NOT mention section numbers unless explicitly shown in the context.
+1. Use only information explicitly present in the context.
 
-2. Do NOT say “the documentation describes…” — explain the concept directly.
+2. Do NOT use prior knowledge about OpenFOAM.
 
-3. Do NOT include a references section.
+3. Do NOT invent section numbers, page numbers, or guide names.
 
-4. Use inline citations only in the format [n].
+4. Do NOT include a references section.
 
-5. Every technical claim must be supported by context.
-
-6. If information is missing, respond exactly:
+5. If the context does not contain enough information to answer fully, respond exactly:
 "This information is not available in the provided documentation."
 
-7. Do not repeat information.
+6. If citation markers (e.g., [1], [2]) are present in the context, you may reuse them.
+
+7. If no citation markers are present in the context, do NOT generate any citations.
+
+8. Do NOT state “the documentation says” — explain directly.
+
+9. Do not repeat information.
+QUESTION:
+{question}
 
 CONTEXT:
 {context}
-
-QUESTION:
-{question}
 
 Write a direct technical explanation using only supported information.
 """
