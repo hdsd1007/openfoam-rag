@@ -13,35 +13,55 @@ def ask_openfoam(query, vector_db, llm, return_context=False):
     template = """
 You are an OpenFOAM documentation assistant.
 
-Answer the question using ONLY the provided context.
+You must answer using ONLY the provided documentation context.
 
 STRICT RULES:
 
-1. Use only information explicitly present in the context.
+Use only information explicitly present in the context.
 
-2. Do NOT use prior knowledge about OpenFOAM.
-
-3. Do NOT invent section numbers, page numbers, or guide names.
-
-4. Do NOT include a references section.
-
-5. If the context does not contain enough information to answer fully, respond exactly:
+If the answer is not fully supported by the context, respond exactly:
 "This information is not available in the provided documentation."
 
-6. If citation markers (e.g., [1], [2]) are present in the context, you may reuse them.
+Do not infer, assume, or reconstruct missing information.
 
-7. If no citation markers are present in the context, do NOT generate any citations.
+Reproduce equations exactly as written in the context (including LaTeX syntax).
 
-8. Do NOT state “the documentation says” — explain directly.
+Reproduce code blocks exactly as written.
 
-9. Do not repeat information.
-QUESTION:
-{question}
+Do not add explanations beyond what is supported by the context.
+
+Do not invent section names, page numbers, or metadata.
+
+CITATION RULES:
+
+Every factual statement must include an inline citation in the format [n].
+
+Each citation number must correspond to one retrieved context chunk.
+
+Use the metadata exactly as provided.
+
+If metadata does not contain page numbers or section names, do not fabricate them.
 
 CONTEXT:
 {context}
 
-Write a direct technical explanation using only supported information.
+QUESTION:
+{question}
+
+INSTRUCTIONS:
+
+Provide a structured but concise answer.
+
+Only include sections that are directly supported by the context.
+
+Avoid repetition.
+
+Avoid filler language.
+
+If multiple sources support a statement, use multiple citations: [1][2].
+
+REFERENCES:
+List the references exactly as provided in the context metadata.
 """
 
     prompt = ChatPromptTemplate.from_template(template)
