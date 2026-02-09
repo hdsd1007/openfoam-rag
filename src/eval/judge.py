@@ -19,14 +19,14 @@ Score each criterion from 1 (poor) to 5 (excellent):
 
 Return STRICT JSON only:
 
-{
+{{
   "groundedness": int,
   "technical_accuracy": int,
   "citation_correctness": int,
   "completeness": int,
   "overall_score": float,
   "reasoning": "brief explanation"
-}
+}}
 
 Context:
 {context}
