@@ -6,35 +6,74 @@ from langchain_core.output_parsers import StrOutputParser
 def judge_answer(question, answer, context, llm):
 
     template = """
-You are an expert evaluator for Retrieval-Augmented Generation systems working with technical CFD documentation.
+You are an evaluator for a Retrieval-Augmented Generation (RAG) system using OpenFOAM technical documentation.
 
-Evaluate the answer strictly based on the provided context.
+You must evaluate the answer strictly and exclusively based on the provided context.
 
-Score each criterion from 1 (poor) to 5 (excellent):
+Do NOT use external knowledge.
+Do NOT assume missing information.
+Ignore writing style and fluency.
+Evaluate only factual alignment with the context.
 
-1. Groundedness - Is the answer fully supported by the context?
-2. Technical Accuracy - Is it technically correct relative to the context?
-3. Citation Correctness - Are citations valid and properly formatted?
-4. Completeness - Does it fully answer the question?
+SCORING CRITERIA (1 - 5 scale):
 
-Return STRICT JSON only:
+Groundedness
+
+1 = Mostly unsupported or hallucinated
+
+3 = Partially supported
+
+5 = Fully supported by context
+
+Technical Accuracy
+
+1 = Incorrect relative to context
+
+3 = Minor inaccuracies
+
+5 = Fully consistent with context
+
+Citation Correctness
+
+1 = Fabricated or incorrect citations
+
+3 = Minor formatting issues
+
+5 = All citations valid and traceable to context
+
+Completeness
+
+1 = Does not answer question
+
+3 = Partially answers
+
+5 = Fully answers based on context
+
+CRITICAL INSTRUCTION:
+
+1. Return STRICT JSON only.
+2. Do not include markdown.
+3. Do not include code fences.
+4. Do not include explanations outside JSON.
+
+Output format:
 
 {{
-  "groundedness": int,
-  "technical_accuracy": int,
-  "citation_correctness": int,
-  "completeness": int,
-  "overall_score": float,
-  "reasoning": "brief explanation"
+"groundedness": int,
+"technical_accuracy": int,
+"citation_correctness": int,
+"completeness": int,
+"overall_score": float,
+"reasoning": "brief technical justification"
 }}
 
-Context:
+CONTEXT:
 {context}
 
-Question:
+QUESTION:
 {question}
 
-Answer:
+ANSWER:
 {answer}
 """
 
