@@ -19,7 +19,7 @@ def load_generator_llm():
         "text-generation",
         model=model,
         tokenizer=tokenizer,
-        max_new_tokens=600,
+        max_new_tokens=1024,
         temperature=0.2,          # small creativity
         return_full_text=False
     )
