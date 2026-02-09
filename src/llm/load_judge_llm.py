@@ -19,7 +19,7 @@ def load_judge_llm():
         "text-generation",
         model=model,
         tokenizer=tokenizer,
-        max_new_tokens=400,
+        max_new_tokens=600,
         temperature=0.0,        # deterministic
         return_full_text=False
     )

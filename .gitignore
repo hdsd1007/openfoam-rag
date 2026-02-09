@@ -1,5 +1,6 @@
 # Ignore the data folder (PDFs are too heavy for Git)
 data/
+outputs/
 
 # Ignore the local vector database
 db/
