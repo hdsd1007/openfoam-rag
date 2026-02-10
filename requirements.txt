@@ -10,3 +10,4 @@ langchain-community
 transformers 
 bitsandbytes 
 accelerate
+PIL
