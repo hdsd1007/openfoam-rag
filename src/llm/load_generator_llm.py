@@ -5,7 +5,7 @@ from langchain_community.llms import HuggingFacePipeline
 
 def load_generator_llm():
 
-    model_id = "unsloth/llama-3-8b-Instruct-bnb-4bit"
+    model_id = "meta-llama/Llama-3.2-1B"
 
     tokenizer = AutoTokenizer.from_pretrained(model_id)
 

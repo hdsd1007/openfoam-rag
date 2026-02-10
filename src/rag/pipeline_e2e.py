@@ -1,42 +1,91 @@
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
+from langchain.prompts import PromptTemplate
+
+
+
+def format_context_with_metadata(docs):
+    """Format retrieved documents with chunk numbers and rich metadata"""
+    context_parts = []
+    
+    for i, doc in enumerate(docs, 1):
+        metadata = doc.metadata
+        
+        # Build metadata string from available fields
+        meta_parts = []
+        
+        if metadata.get('source'):
+            meta_parts.append(f"Source: {metadata['source']}")
+        
+        if metadata.get('section') and metadata['section'] != 'N/A':
+            meta_parts.append(f"Section: {metadata['section']}")
+            
+        if metadata.get('subsection') and metadata['subsection'] != 'N/A':
+            meta_parts.append(f"Subsection: {metadata['subsection']}")
+            
+        if metadata.get('subsubsection') and metadata['subsubsection'] != 'N/A':
+            meta_parts.append(f"Subsubsection: {metadata['subsubsection']}")
+        
+        if metadata.get('page'):
+            meta_parts.append(f"Page: {metadata['page']}")
+            
+        if metadata.get('parser'):
+            meta_parts.append(f"Parser: {metadata['parser']}")
+        
+        metadata_str = " | ".join(meta_parts) if meta_parts else "No metadata available"
+        
+        # Format chunk with clear numbering and metadata
+        chunk_header = f"[{i}] ({metadata_str})"
+        chunk_text = f"{chunk_header}\n{doc.page_content}\n"
+        
+        context_parts.append(chunk_text)
+    
+    return "\n" + "="*80 + "\n".join(context_parts)
 
 
 def ask_openfoam(query, vector_db, llm, return_context=False):
 
+    # Retrieve top-k most relevant chunks
     retriever = vector_db.as_retriever(search_kwargs={"k": 5})
-    
     docs = retriever.invoke(query)
-    context_text = "\n\n".join([d.page_content for d in docs])
+    
 
     template = """
-You are a Senior OpenFOAM Documentation Specialist. Your goal is to provide highly structured, technical answers based EXCLUSIVELY on the provided context.
+You are an OpenFOAM technical expert helping users understand OpenFOAM concepts and implementation. Provide clear, accurate answers based on the retrieved documentation while maintaining a helpful, professional tone.
 
-### MANDATORY RESPONSE STRUCTURE:
-You must format your response exactly as follows:
+## Response Guidelines:
 
-**Introduction**
-[Brief high-level overview of the topic with inline citations.]
+**Structure your answer naturally:**
+- Start with a clear explanation of the concept or solution
+- Include technical details, formulas, and code examples when relevant
+- Cite sources inline using [n] notation (e.g., [1], [2])
+- End with a References section listing all cited chunks with their metadata
 
-**Technical Explanation**
-[Detailed technical breakdown. Every factual claim must have an inline citation, e.g., [1].]
+**Content Requirements:**
+- Base your answer strictly on the provided context chunks below
+- Each chunk is marked as [n] with associated metadata
+- Cite the specific chunk number for each statement: "OpenFOAM uses finite volume method [1]"
+- If mathematical equations appear in the context, include them using LaTeX format
+- If code snippets or configuration examples exist, include them as code blocks
+- When the context doesn't contain sufficient information, clearly state what's missing and what is available
 
-**Mathematical Formulation**
-[Include LaTeX equations only if they appear in the context. If no equations are present, state: "No mathematical formulation provided in the context."]
+**Writing Style:**
+- Use clear, professional language without unnecessary formality
+- Explain technical concepts in an accessible way while maintaining accuracy
+- Answer directly without preambles like "Based on the context..."
+- Don't invent or infer information beyond what's explicitly in the chunks
 
-**Implementation Details**
-[Include code blocks or dictionary snippets only if they appear in the context. Otherwise, state: "No implementation details provided in the context."]
+**Citations Format:**
+- Inline: Add [n] immediately after each statement derived from that chunk
+- References section at the end: List each cited chunk with its metadata
+  Example format:
+  **References**
+  [1] User Guide | Section 4.2 | Page 45
+  [2] Programmer's Guide | Section 3.1 | Page 120
 
-**References**
-[A numbered list matching the inline citations. Format: [n] Metadata provided in context. If no metadata exists, use: [n] Provided Context Source.]
-
-### CRITICAL ADHERENCE RULES:
-1. **Zero External Knowledge:** Use ONLY the provided context. Do not use your internal training data to "fill in the gaps."
-2. **The "Silence" Rule:** If the context does not contain the answer, you must respond with this exact phrase and NOTHING else: "This information is not available in the provided documentation."
-3. **No Metadata Hallucination:** Do not invent Section numbers, Page numbers, or Guide names. If the context does not explicitly state "Page 10," do not include "Page 10" in your references.
-4. **Formula & Code Integrity:** Reproduce LaTeX and code blocks exactly as they appear in the text. Do not summarize or alter them.
-5. **No Filler:** Start immediately with the **Introduction** header. Do not say "Based on the context..." or "Here is the answer."
+**When Information is Missing:**
+If the context completely lacks the requested information, respond: "This information is not available in the provided documentation."
 
 ---
 CONTEXT:
@@ -52,7 +101,7 @@ ANSWER:
     prompt = ChatPromptTemplate.from_template(template)
 
     chain = (
-        {"context": retriever, "question": RunnablePassthrough()}
+        {"context": retriever | format_context_with_metadata, "question": RunnablePassthrough()}
         | prompt
         | llm
         | StrOutputParser()
@@ -60,7 +109,16 @@ ANSWER:
 
     response = chain.invoke(query)
     
+    # Extract text from response (handles different LLM response formats)
+    if hasattr(response, 'content'):
+        response_text = response.content
+    elif isinstance(response, str):
+        response_text = response
+    else:
+        response_text = str(response)
+    
     if return_context:
-        return response, context_text
+        docs = retriever.invoke(query)
+        return response_text, docs
 
-    return response
+    return response_text
