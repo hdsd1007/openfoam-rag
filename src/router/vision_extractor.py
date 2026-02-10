@@ -37,31 +37,56 @@ Remove timestamps, terminal paths, and UI clutter.
 Return clean structured text.
 """
 
+        # ----------------------------
+        # Build chat message
+        # ----------------------------
         messages = [
             {
                 "role": "user",
                 "content": [
-                    {"type": "image", "image": image},
-                    {"type": "text", "text": prompt},
+                    {"type": "image"},
+                    {"type": "text", "text": prompt_text}
                 ],
             }
         ]
 
-        inputs = self.processor.apply_chat_template(
+        # ----------------------------
+        # Apply template (returns string)
+        # ----------------------------
+        prompt = self.processor.apply_chat_template(
             messages,
-            add_generation_prompt=True,
-            return_tensors="pt"
-        ).to(self.device)
+            add_generation_prompt=True
+        )
 
-        output = self.model.generate(
+        # ----------------------------
+        # Prepare multimodal tensors
+        # IMPORTANT: images must be list
+        # ----------------------------
+        inputs = self.processor(
+            text=prompt,
+            images=[image],
+            return_tensors="pt"
+        )
+
+        inputs = inputs.to(self.device)
+
+        # ----------------------------
+        # Generate
+        # ----------------------------
+        generated_ids = self.model.generate(
             **inputs,
             max_new_tokens=500
         )
 
-        response = self.processor.batch_decode(
-            output[0],
+        # ----------------------------
+        # Decode (batch)
+        # ----------------------------
+        generated_texts = self.processor.batch_decode(
+            generated_ids,
             skip_special_tokens=True
         )
+
+        response = generated_texts[0]
 
         return self._post_clean(response)
 
