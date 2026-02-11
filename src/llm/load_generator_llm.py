@@ -5,7 +5,7 @@ from langchain_community.llms import HuggingFacePipeline
 
 def load_generator_llm():
 
-    model_id = "Qwen/Qwen2.5-1.5B-Instruct"
+    model_id = "Qwen/Qwen2.5-3B-Instruct"
 
     tokenizer = AutoTokenizer.from_pretrained(model_id)
 
@@ -20,10 +20,11 @@ def load_generator_llm():
         model=model,
         tokenizer=tokenizer,
         max_new_tokens=1024,
-        temperature=0.2,          # small creativity
+        temperature=0.0,          # small creativity
         return_full_text=False,
-        do_sample = True,
-        pad_token_id=tokenizer.eos_token_id
+        do_sample = False,
+        pad_token_id=tokenizer.eos_token_id,
+        repetition_penalty=1.1
     )
 
     return HuggingFacePipeline(pipeline=pipe)
