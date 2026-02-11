@@ -2,6 +2,7 @@ docling
 pymupdf4llm
 marker-pdf 
 langchain-text-splitters 
+langchain-google-genai
 sentence-transformers 
 chromadb 
 langchain  
