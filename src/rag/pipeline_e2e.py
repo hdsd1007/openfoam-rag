@@ -51,34 +51,31 @@ def ask_openfoam(query, vector_db, llm, return_context=False):
     
 
     template = """
-You are an OpenFOAM technical expert assisting users with OpenFOAM concepts, configuration, and errors.
+You are an OpenFOAM technical expert assisting users with OpenFOAM concepts, configuration, numerical schemes, and runtime errors.
 
 Provide clear, technically accurate explanations grounded strictly in the retrieved documentation.
 
-CRITICAL REQUIREMENT:
-- Every factual statement MUST include at least one inline citation [n].
-- If a paragraph contains 3 factual claims, it must contain 3 citations.
-- Answers without inline citations are invalid.
-- Do NOT place citations only in the References section.
+CRITICAL CITATION RULES:
+- Every factual or technical statement MUST include at least one inline citation in the format [n].
+- A factual statement is any claim about OpenFOAM behavior, configuration, definitions, equations, file structure, or error interpretation.
+- No factual sentence may appear without a citation.
+- If a sentence cannot be supported by the provided context, remove it.
+- Citations must correspond exactly to the numbered context chunks.
 
-Guidelines:
-• Answer naturally and directly, as an expert would.
-• Use inline citations in the format [n] for every statement derived from a retrieved chunk.
-• Do not invent or assume information not present in the provided context.
-• If mathematical equations appear, format them using LaTeX.
-• If code snippets or configuration examples are present in the context, include them using proper code blocks.
-• If the documentation does not contain enough information to fully answer the question, clearly state what is missing.
-• If no relevant information exists, respond:
+WRITING GUIDELINES:
+- Answer naturally and directly, as an expert would.
+- Do not include meta-commentary (e.g., “Based on the context…”).
+- Do not fabricate or infer information beyond the provided chunks.
+- If mathematical equations appear in the context, reproduce them using LaTeX.
+- If configuration examples or code snippets appear, include them using proper code blocks.
+- If the context only partially answers the question, clearly state what information is missing.
+- If no relevant information exists, respond exactly:
   "This information is not available in the provided documentation."
-• Every factual or technical claim must be traceable to at least one cited chunk.
 
-
-Avoid:
-• Meta-commentary like “Based on the context…”
-• Overly rigid formatting
-• Fabricating missing details
-
-End your response with a References section listing only the cited chunks in this format:
+STRUCTURE:
+- Begin with a clear explanation of the concept or solution.
+- Use inline citations [n] immediately after each factual statement.
+- End with a References section listing only the cited chunks in the following format:
 
 References
 [n] Document Title | Section | Page
@@ -103,16 +100,10 @@ QUESTION:
 
     response = chain.invoke(query)
     
-    # Extract text from response (handles different LLM response formats)
-    if hasattr(response, 'content'):
-        response_text = response.content
-    elif isinstance(response, str):
-        response_text = response
-    else:
-        response_text = str(response)
-    
+    # CHANGED: Simplified response handling (Gemini returns clean strings via StrOutputParser)
     if return_context:
+        # Retrieve docs for judge evaluation
         docs = retriever.invoke(query)
-        return response_text, docs
+        return response, docs
 
-    return response_text
+    return response
