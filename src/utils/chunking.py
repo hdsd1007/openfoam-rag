@@ -1,7 +1,7 @@
 import re
 import tiktoken
 from typing import List, Dict, Union
-from langchain_text_splitters import MarkdownHeaderTextSplitter, RecursiveCharacterTextSplitter
+from langchain_text_splitters import MarkdownHeaderTextSplitter, TokenTextSplitter  # CHANGED: Import TokenTextSplitter
 
 
 # --------------------------------------------------
@@ -30,7 +30,7 @@ def _get_headers(parser_type: str):
 
 
 # --------------------------------------------------
-# CHANGED: Extract ALL page markers with positions
+# Extract ALL page markers with positions
 # --------------------------------------------------
 def _extract_all_page_markers(content: str, parser_type: str) -> List[tuple]:
     """
@@ -56,7 +56,7 @@ def _extract_all_page_markers(content: str, parser_type: str) -> List[tuple]:
 
 
 # --------------------------------------------------
-# CHANGED: Find page number for a given chunk position
+# Find page number for a given chunk position
 # --------------------------------------------------
 def _find_page_for_position(position: int, page_markers: List[tuple]) -> str:
     """
@@ -101,10 +101,11 @@ def get_adaptive_chunks(
         headers_to_split_on=_get_headers(parser_type)
     )
 
-    recursive_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=max_tokens * 4,
-        chunk_overlap=overlap * 4,
-        separators=["\n\n", "\n", " ", ""],
+    # CHANGED: Use TokenTextSplitter for deterministic, token-exact splitting
+    token_splitter = TokenTextSplitter(
+        chunk_size=max_tokens,
+        chunk_overlap=overlap,
+        encoding_name="cl100k_base"
     )
 
     final_chunks = []
@@ -129,10 +130,11 @@ def get_adaptive_chunks(
 
                 token_count = len(enc.encode(content))
 
+                # CHANGED: Use token_splitter instead of recursive_splitter
                 split_texts = (
                     [content]
                     if token_count <= max_tokens
-                    else recursive_splitter.split_text(content)
+                    else token_splitter.split_text(content)
                 )
 
                 for chunk_text in split_texts:
@@ -140,7 +142,7 @@ def get_adaptive_chunks(
                         {
                             "text": chunk_text,
                             "metadata": {
-                                **sect.metadata,
+                                # CHANGED: Explicit metadata order for consistency
                                 "source": filename,
                                 "parser": parser_type,
                                 "page": page_number,
@@ -158,15 +160,14 @@ def get_adaptive_chunks(
 
     # ==================================================
     # CASE 2 – Docling & Marker (Single Markdown String)
-    # CHANGED: Pre-extract all page markers before splitting
     # ==================================================
     else:
-        # CHANGED: Extract all page markers with their positions BEFORE splitting
+        # Extract all page markers with their positions BEFORE splitting
         page_markers = _extract_all_page_markers(full_md, parser_type)
         
         sections = header_splitter.split_text(full_md)
 
-        # CHANGED: Track cumulative position to map chunks to pages
+        # Track cumulative position to map chunks to pages
         cumulative_position = 0
         
         for sect in sections:
@@ -174,7 +175,7 @@ def get_adaptive_chunks(
             if not content:
                 continue
 
-            # CHANGED: Find page based on position in original document
+            # Find page based on position in original document
             current_page = _find_page_for_position(cumulative_position, page_markers)
             
             # Update cumulative position for next section
@@ -186,10 +187,11 @@ def get_adaptive_chunks(
 
             token_count = len(enc.encode(content))
 
+            # CHANGED: Use token_splitter instead of recursive_splitter
             split_texts = (
                 [content]
                 if token_count <= max_tokens
-                else recursive_splitter.split_text(content)
+                else token_splitter.split_text(content)
             )
 
             for chunk_text in split_texts:
@@ -197,10 +199,10 @@ def get_adaptive_chunks(
                     {
                         "text": chunk_text,
                         "metadata": {
-                            **sect.metadata,
+                            # CHANGED: Explicit metadata order for consistency (no **sect.metadata)
                             "source": filename,
                             "parser": parser_type,
-                            "page": current_page,  # CHANGED: Use tracked page number
+                            "page": current_page,
                             "section": sect.metadata.get("Section", "N/A"),
                             "subsection": sect.metadata.get("Subsection", "N/A"),
                             "subsubsection": sect.metadata.get("Subsubsection", "N/A"),

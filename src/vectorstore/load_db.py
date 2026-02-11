@@ -16,7 +16,8 @@ def load_vector_db(parser_name, base_dir="db"):
 
     vector_db = Chroma(
         persist_directory=str(persist_dir),
-        embedding_function=embeddings
+        embedding_function=embeddings,
+        collection_metadata={"hnsw:space": "cosine"}
     )
 
     return vector_db

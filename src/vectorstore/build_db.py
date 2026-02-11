@@ -28,7 +28,8 @@ def build_vector_db(chunks, parser_name, base_dir="db"):
         texts=texts,
         metadatas=metadatas,
         embedding=embeddings,
-        persist_directory=str(persist_path)
+        persist_directory=str(persist_path),
+        collection_metadata={"hnsw:space": "cosine"}
     )
 
     vector_db.persist()
