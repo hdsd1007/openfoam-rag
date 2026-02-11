@@ -94,7 +94,6 @@ CONTEXT:
 QUESTION:
 {question}
 
-ANSWER:
 """
 
     prompt = ChatPromptTemplate.from_template(template)

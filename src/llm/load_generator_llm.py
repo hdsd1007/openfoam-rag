@@ -21,7 +21,9 @@ def load_generator_llm():
         tokenizer=tokenizer,
         max_new_tokens=1024,
         temperature=0.2,          # small creativity
-        return_full_text=False
+        return_full_text=False,
+        do_sample = True,
+        pad_token_id=tokenizer.eos_token_id
     )
 
     return HuggingFacePipeline(pipeline=pipe)
