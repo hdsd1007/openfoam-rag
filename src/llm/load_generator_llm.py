@@ -22,7 +22,7 @@ def load_generator_llm():
         )
     
     llm = ChatGoogleGenerativeAI(
-        model="gemini-2.5-flash-lite-preview-09-2025",  # More rigorous for evaluation
+        model="gemini-2.5-flash",  # More rigorous for evaluation
         temperature=0.2,  # Deterministic for judging
         max_output_tokens=1024,
         google_api_key=api_key
