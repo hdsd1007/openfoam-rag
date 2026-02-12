@@ -12,7 +12,7 @@ class VisionExtractor:
         self.processor = AutoProcessor.from_pretrained(model_name)
         self.model = AutoModelForVision2Seq.from_pretrained(
             model_name,
-            torch_dtype=torch.float16 if self.device == "cuda" else torch.float32,
+            dtype=torch.float16 if self.device == "cuda" else torch.float32,
             device_map="auto"
         )
 
@@ -25,21 +25,21 @@ class VisionExtractor:
         else:
             raise ValueError("Invalid image input")
 
-        prompt = """
-You are analyzing a screenshot of an error encountered while using OpenFOAM.
+        # CHANGE: Improved prompt - broader scope, handles errors + diagrams + config
+        prompt = """Extract all technical content from this OpenFOAM-related image.
+        Include:
+        - Error messages with exact text
+        - Code snippets or configuration entries
+        - Diagram labels, equations, or technical annotations
+        - File paths, dictionary names, or function calls
+        - Any visible OpenFOAM terminology
 
-Extract ONLY:
-- The exact OpenFOAM error message/query
-- The error/query type (e.g., FOAM FATAL ERROR)
-- Missing files or dictionary names if present
+        Omit:
+        - Timestamps, terminal paths, UI decorations
+        - Non-technical interface elements
 
-Remove timestamps, terminal paths, and UI clutter.
-Return clean structured text.
-"""
+        Return clean, structured text preserving technical accuracy."""
 
-        # ----------------------------
-        # Build chat message
-        # ----------------------------
         messages = [
             {
                 "role": "user",
@@ -50,18 +50,11 @@ Return clean structured text.
             }
         ]
 
-        # ----------------------------
-        # Apply template (returns string)
-        # ----------------------------
         prompt = self.processor.apply_chat_template(
             messages,
             add_generation_prompt=True
         )
 
-        # ----------------------------
-        # Prepare multimodal tensors
-        # IMPORTANT: images must be list
-        # ----------------------------
         inputs = self.processor(
             text=prompt,
             images=[image],
@@ -70,17 +63,11 @@ Return clean structured text.
 
         inputs = inputs.to(self.device)
 
-        # ----------------------------
-        # Generate
-        # ----------------------------
         generated_ids = self.model.generate(
             **inputs,
             max_new_tokens=500
         )
 
-        # ----------------------------
-        # Decode (batch)
-        # ----------------------------
         generated_texts = self.processor.batch_decode(
             generated_ids,
             skip_special_tokens=True
@@ -91,18 +78,16 @@ Return clean structured text.
         return self._post_clean(response)
 
     def _post_clean(self, text):
-        # Optional additional filtering
+        # CHANGE: Broadened keywords to catch more content types
         lines = text.split("\n")
         important = []
 
         for line in lines:
             if any(k in line for k in [
-                "FOAM",
-                "ERROR",
-                "Error",
-                "FATAL",
-                "Cannot",
-                "Unknown"
+                "FOAM", "ERROR", "Error", "FATAL", "Cannot", "Unknown",
+                "fv", "dict", "boundary", "solver", "scheme",  # CHANGE: Added OpenFOAM keywords
+                "class", "void", "const",  # CHANGE: Added code keywords
+                "equation", "velocity", "pressure"  # CHANGE: Added physics keywords
             ]):
                 important.append(line)
 

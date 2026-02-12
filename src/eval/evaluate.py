@@ -39,6 +39,12 @@ def evaluate_parser(parser_name):
             context=context,
             llm=judge_llm
         )
+        
+        # Check for judging errors
+        if "error" in score:
+            print(f"Judge error: {score['error']}")
+        else:
+            print(f"Overall score: {score.get('overall_score', 'N/A')}")
 
         results.append({
             "question": question,

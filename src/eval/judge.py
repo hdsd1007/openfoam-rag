@@ -38,65 +38,24 @@ def judge_answer(question, answer, context, llm):
     formatted_context = format_context_for_judge(context)
 
     template = """
-You are an evaluator for a Retrieval-Augmented Generation (RAG) system using OpenFOAM technical documentation.
+You are a RAG system evaluator for OpenFOAM technical documentation.
 
-You must evaluate the answer strictly and exclusively based on the provided context.
+Evaluate the answer using ONLY the provided context. Do not use external knowledge or assume missing information. Ignore writing style—focus solely on factual accuracy.
 
-Do NOT use external knowledge.
-Do NOT assume missing information.
-Ignore writing style and fluency.
-Evaluate only factual alignment with the context.
+SCORING (1-5 scale):
+1. Groundedness: Is every claim supported by the context? (1=mostly unsupported, 5=fully supported)
+2. Technical Accuracy: Are facts correct per the context? (1=incorrect, 5=fully accurate)
+3. Citation Correctness: Are all [n] citations valid and traceable? (1=fabricated, 5=all valid)
+4. Completeness: Does it answer the question using available context? (1=doesn't answer, 5=fully answers)
 
-SCORING CRITERIA (1 - 5 scale):
-
-Groundedness
-
-1 = Mostly unsupported or hallucinated
-
-3 = Partially supported
-
-5 = Fully supported by context
-
-Technical Accuracy
-
-1 = Incorrect relative to context
-
-3 = Minor inaccuracies
-
-5 = Fully consistent with context
-
-Citation Correctness
-
-1 = Fabricated or incorrect citations
-
-3 = Minor formatting issues
-
-5 = All citations valid and traceable to context
-
-Completeness
-
-1 = Does not answer question
-
-3 = Partially answers
-
-5 = Fully answers based on context
-
-CRITICAL INSTRUCTION:
-
-1. Return STRICT JSON only.
-2. Do not include markdown.
-3. Do not include code fences.
-4. Do not include explanations outside JSON.
-
-Output format:
-
+Return ONLY valid JSON (no markdown, no code fences, no explanations):
 {{
 "groundedness": int,
 "technical_accuracy": int,
 "citation_correctness": int,
 "completeness": int,
 "overall_score": float,
-"reasoning": "brief technical justification"
+"reasoning": "brief justification"
 }}
 
 CONTEXT:

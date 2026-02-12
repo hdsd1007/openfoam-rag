@@ -10,6 +10,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--q", required=True, help="Text query or path to image containing OpenFOAM error")
     parser.add_argument("--parser", required=True, choices=["docling", "marker", "pymupdf"])
+    parser.add_argument("--img", help="Optional: Image path to combine with text query")
     parser.add_argument("--verbose", action="store_true", help="Show retrieved chunks and metadata for debugging")
     args = parser.parse_args()
 
@@ -19,7 +20,12 @@ def main():
     # Initialize Multimodal Router
     vision_extractor = VisionExtractor() # You can pass Model and Device Type
     router = QueryRouter(vision_extractor)
-    normalized_query = router.route(args.q)
+    if args.img:
+        # Multimodal: text + image
+        normalized_query = router.route((args.q, args.img))
+    else:
+        # Original: text only or image only
+        normalized_query = router.route(args.q)
 
     # Verbose (Showing Retrieved Chunks)
     if args.verbose:
@@ -32,7 +38,7 @@ def main():
         for i, doc in enumerate(docs, 1):
             print(f"\n[CHUNK {i}]")
             print(f"Metadata: {doc.metadata}")
-            print(f"Content preview: {doc.page_content[:200]}...")
+            print(f"Content preview: {doc.page_content[:300]}...")
             print("-"*80)
     else:
         response = ask_openfoam(normalized_query, vector_db, llm)
@@ -55,3 +61,10 @@ if __name__ == "__main__":
 # !python ask.py --parser marker --q error.png
 # For Image with verbose output
 # python ask.py --parser marker --q error.png --verbose
+
+# For Text + Image:
+# python ask.py --parser marker --q "Why am I getting this error?" --img error_screenshot.png
+# python ask.py --parser marker --q "Explain this configuration" --img config_snippet.png
+
+# Verbose mode works with all:
+# python ask.py --parser marker --q "Fix this error" --img error.png --verbose

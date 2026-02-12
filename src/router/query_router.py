@@ -70,6 +70,26 @@ class QueryRouter:
             raise ValueError("No readable text extracted from image.")
 
         return extracted_text.strip()
+    
+    def _handle_multimodal(self, text_query: str, image_input: Union[str, Image.Image]) -> str:
+        """
+        CHANGE: New method to handle text + image combinations.
+        
+        Extracts text from image and combines with user's text query.
+        """
+        text_query = text_query.strip()
+        
+        # Extract text from image
+        extracted_text = self.vision_extractor.extract(image_input)
+        
+        if not extracted_text or not extracted_text.strip():
+            # If image extraction fails, just use text query
+            return text_query
+        
+        # Combine: user's question + extracted error/content
+        combined = f"{text_query}\n\nExtracted from image:\n{extracted_text.strip()}"
+        
+        return combined
 
     # -----------------------------------------------------
     # Utility
