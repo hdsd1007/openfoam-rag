@@ -1,61 +1,62 @@
 import json
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
+from src.rag.pipeline_e2e import format_context_with_metadata
 
-def format_context_for_judge(docs):
-    """
-    Format documents with chunk numbers matching what the generator sees.
-    This allows the judge to verify citation correctness.
-    """
-    context_parts = []
-    
-    for i, doc in enumerate(docs, 1):
-        metadata = doc.metadata
-        
-        # Build metadata string
-        meta_parts = []
-        if metadata.get('source'):
-            meta_parts.append(f"Source: {metadata['source']}")
-        if metadata.get('section') and metadata['section'] != 'N/A':
-            meta_parts.append(f"Section: {metadata['section']}")
-        if metadata.get('subsection') and metadata['subsection'] != 'N/A':
-            meta_parts.append(f"Subsection: {metadata['subsection']}")
-        if metadata.get('subsubsection') and metadata['subsubsection'] != 'N/A':
-            meta_parts.append(f"Subsubsection: {metadata['subsubsection']}")
-        if metadata.get('page'):
-            meta_parts.append(f"Page: {metadata['page']}")
-            
-        metadata_str = " | ".join(meta_parts) if meta_parts else "No metadata"
-        
-        # Format chunk exactly as generator sees it
-        chunk_text = f"[{i}] ({metadata_str})\n{doc.page_content}\n"
-        context_parts.append(chunk_text)
-    
-    return "\n" + "="*80 + "\n".join(context_parts)
 
 def judge_answer(question, answer, context, llm):
     
-    formatted_context = format_context_for_judge(context)
+    formatted_context = format_context_with_metadata(context)
 
     template = """
-You are a RAG system evaluator for OpenFOAM technical documentation.
+You are a strict RAG evaluator reviewing an OpenFOAM technical answer.
 
-Evaluate the answer using ONLY the provided context. Do not use external knowledge or assume missing information. Ignore writing style—focus solely on factual accuracy.
+Evaluate the answer using ONLY the provided context. Do not use external knowledge or assume missing information.
 
-SCORING (1-5 scale):
-1. Groundedness: Is every claim supported by the context? (1=mostly unsupported, 5=fully supported)
-2. Technical Accuracy: Are facts correct per the context? (1=incorrect, 5=fully accurate)
-3. Citation Correctness: Are all [n] citations valid and traceable? (1=fabricated, 5=all valid)
-4. Completeness: Does it answer the question using available context? (1=doesn't answer, 5=fully answers)
+Be skeptical and analytical, like a human reviewer grading a technical exam.
 
-Return ONLY valid JSON (no markdown, no code fences, no explanations):
+Ignore writing style. Focus only on factual grounding, correctness, and completeness.
+
+SCORING (1-5 scale, use the full range; do not default to 5):
+
+1. Groundedness:
+   - 5 = Every factual claim is explicitly supported by the context.
+   - 3 = Mostly supported, but contains minor unsupported assumptions or generalizations.
+   - 1 = Contains unsupported or invented claims.
+
+2. Technical Accuracy:
+   - 5 = Fully accurate per the context.
+   - 3 = Minor imprecision or slight misinterpretation.
+   - 1 = Incorrect or contradicts the context.
+
+3. Citation Correctness:
+   - 5 = Every citation [n] correctly corresponds to the appropriate chunk.
+   - 3 = Citations exist but are loosely matched or overused.
+   - 1 = Fabricated, mismatched, or invalid citations.
+
+4. Completeness:
+   - 5 = Fully answers the question using available context.
+   - 3 = Partially answers or misses important aspects present in context.
+   - 1 = Fails to answer the question.
+
+5. If the answer appears truncated (incomplete sentence, missing References section, cut-off citation like "["), deduct 2 points from Completeness.
+
+Additional strict rules:
+- If any factual sentence lacks citation support, reduce Groundedness.
+- If the answer overgeneralizes beyond what is explicitly stated, reduce Groundedness.
+- If it repeats one citation excessively for multiple unrelated claims, reduce Citation Correctness.
+- If important information from the context is ignored, reduce Completeness.
+- Do not give 5 unless the answer is rigorously supported and complete.
+
+Return ONLY valid JSON (no markdown, no explanations):
+
 {{
-"groundedness": int,
-"technical_accuracy": int,
-"citation_correctness": int,
-"completeness": int,
-"overall_score": float,
-"reasoning": "brief justification"
+  "groundedness": int,
+  "technical_accuracy": int,
+  "citation_correctness": int,
+  "completeness": int,
+  "overall_score": float,
+  "reasoning": "brief but specific justification mentioning concrete issues"
 }}
 
 CONTEXT:

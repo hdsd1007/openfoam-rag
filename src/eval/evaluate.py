@@ -7,7 +7,8 @@ from src.eval.judge import judge_answer
 from src.vectorstore.load_db import load_vector_db
 from src.llm.load_judge_llm import load_judge_llm
 from src.llm.load_generator_llm import load_generator_llm
-from src.rag.pipeline_e2e import ask_openfoam
+from src.rag.pipeline_e2e import ask_openfoam, format_context_with_metadata
+
 
 
 def evaluate_parser(parser_name):
@@ -49,6 +50,7 @@ def evaluate_parser(parser_name):
         results.append({
             "question": question,
             "answer": response,
+            "context": format_context_with_metadata(context),
             "evaluation": score
         })
 

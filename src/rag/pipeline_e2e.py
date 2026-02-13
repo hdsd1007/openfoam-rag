@@ -5,36 +5,30 @@ from langchain_core.prompts import ChatPromptTemplate
 
 
 def format_context_with_metadata(docs):
-    """Format retrieved documents with chunk numbers and rich metadata"""
+    """
+    Format retrieved documents with chunk numbers and rich metadata.
+    Used by both generator and judge to ensure consistency.
+    """
     context_parts = []
     
     for i, doc in enumerate(docs, 1):
         metadata = doc.metadata
         
-        # Build metadata string from available fields
         meta_parts = []
-        
         if metadata.get('source'):
             meta_parts.append(f"Source: {metadata['source']}")
-        
         if metadata.get('section') and metadata['section'] != 'N/A':
             meta_parts.append(f"Section: {metadata['section']}")
-            
         if metadata.get('subsection') and metadata['subsection'] != 'N/A':
             meta_parts.append(f"Subsection: {metadata['subsection']}")
-            
         if metadata.get('subsubsection') and metadata['subsubsection'] != 'N/A':
             meta_parts.append(f"Subsubsection: {metadata['subsubsection']}")
-        
         if metadata.get('page'):
             meta_parts.append(f"Page: {metadata['page']}")
+        # REMOVED: parser field for judge (not needed)
             
-        if metadata.get('parser'):
-            meta_parts.append(f"Parser: {metadata['parser']}")
+        metadata_str = " | ".join(meta_parts) if meta_parts else "No metadata"
         
-        metadata_str = " | ".join(meta_parts) if meta_parts else "No metadata available"
-        
-        # Format chunk with clear numbering and metadata
         chunk_header = f"[{i}] ({metadata_str})"
         chunk_text = f"{chunk_header}\n{doc.page_content}\n"
         
@@ -106,8 +100,6 @@ QUESTION:
     
     # CHANGED: Simplified response handling (Gemini returns clean strings via StrOutputParser)
     if return_context:
-        # Retrieve docs for judge evaluation
-        docs = retriever.invoke(query)
         return response, docs
 
     return response
