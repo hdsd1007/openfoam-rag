@@ -1,3 +1,10 @@
+import os
+import warnings
+warnings.filterwarnings('ignore')
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
+
+
 import argparse
 import json
 from pathlib import Path

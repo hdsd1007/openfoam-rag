@@ -1,3 +1,10 @@
+import os
+import warnings
+warnings.filterwarnings('ignore')
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
+
+
 import argparse
 from src.vectorstore.load_db import load_vector_db
 from src.llm.load_generator_llm import load_generator_llm

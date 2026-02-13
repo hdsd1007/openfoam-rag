@@ -1,5 +1,8 @@
-
 import os
+import warnings
+warnings.filterwarnings('ignore')
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+
 import json
 import argparse
 from pathlib import Path
