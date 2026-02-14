@@ -1,8 +1,7 @@
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
-
-
+from sentence_transformers import CrossEncoder
 
 def format_context_with_metadata(docs):
     """
@@ -26,6 +25,11 @@ def format_context_with_metadata(docs):
         if metadata.get('page'):
             meta_parts.append(f"Page: {metadata['page']}")
         # REMOVED: parser field for judge (not needed)
+        # Add evaluation scores to metadata string
+        if metadata.get('similarity_score') is not None:
+            meta_parts.append(f"Sim Score: {metadata['similarity_score']}")
+        if metadata.get('rerank_score') is not None:
+            meta_parts.append(f"Rerank Score: {metadata['rerank_score']}")
             
         metadata_str = " | ".join(meta_parts) if meta_parts else "No metadata"
         
@@ -40,8 +44,30 @@ def format_context_with_metadata(docs):
 def ask_openfoam(query, vector_db, llm, return_context=False):
 
     # Retrieve top-k most relevant chunks
-    retriever = vector_db.as_retriever(search_kwargs={"k": 5})
-    docs = retriever.invoke(query)
+    # retriever = vector_db.as_retriever(search_kwargs={"k": 5})
+    # docs = retriever.invoke(query)
+    
+    # Stage 1 => Retreiving K = 15 chunks
+    docs_with_scores = vector_db.similarity_search_with_score(query, k=15)
+    initial_docs = []
+    for doc, score in docs_with_scores:
+        # Save score for evaluation; round for readability
+        doc.metadata['similarity_score'] = round(float(score), 4)
+        initial_docs.append(doc)
+        
+    # Stage 2 => Re-Ranking using Cross-Encoder K = 5
+    reranker = CrossEncoder('BAAI/bge-reranker-base')
+    
+    # Prepare query-chunk pairs for the re-ranker
+    pairs = [[query, doc.page_content] for doc in initial_docs]
+    rerank_scores = reranker.predict(pairs)
+    
+    # Attach rerank scores to metadata
+    for doc, score in zip(initial_docs, rerank_scores):
+        doc.metadata['rerank_score'] = round(float(score), 4)
+
+    # Sort by rerank score descending (higher is more relevant) and take top 5
+    final_docs = sorted(initial_docs, key=lambda x: x.metadata['rerank_score'], reverse=True)[:5]
     
 
     template = """
@@ -87,19 +113,37 @@ QUESTION:
 {question}
 """
 
+    # prompt = ChatPromptTemplate.from_template(template)
+
+    # chain = (
+    #     {"context": retriever | format_context_with_metadata, "question": RunnablePassthrough()}
+    #     | prompt
+    #     | llm
+    #     | StrOutputParser()
+    # )
+
+    # response = chain.invoke(query)
+    
+    # # CHANGED: Simplified response handling (Gemini returns clean strings via StrOutputParser)
+    # if return_context:
+    #     return response, docs
+
+    # return response
+    
+    # Updated Logic for Re-Ranker System
     prompt = ChatPromptTemplate.from_template(template)
 
-    chain = (
-        {"context": retriever | format_context_with_metadata, "question": RunnablePassthrough()}
-        | prompt
-        | llm
-        | StrOutputParser()
-    )
+    # Format the re-ranked top 5 context for the LLM
+    formatted_context = format_context_with_metadata(final_docs)
 
-    response = chain.invoke(query)
+    # Execute the generation chain
+    chain = prompt | llm | StrOutputParser()
+    response = chain.invoke({
+        "context": formatted_context, 
+        "question": query
+    })
     
-    # CHANGED: Simplified response handling (Gemini returns clean strings via StrOutputParser)
     if return_context:
-        return response, docs
+        return response, final_docs
 
     return response
