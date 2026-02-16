@@ -1,311 +1,202 @@
 """
-Generate visual statistics dashboard from saved queries.
+Generate dashboard from multiple saved query JSON files.
 
 Usage:
-    python generate_stats_dashboard.py --input query_outputs/*.json --output stats.html
+    python generate_multi_dashboard.py --input run4/*.json --output dashboard.html
 """
 
 import argparse
 import json
-import statistics
 from pathlib import Path
-import re
-
-
-def load_query_files(filepaths):
-    """Load all query JSON files."""
-    queries = []
-    for filepath in filepaths:
-        with open(filepath, 'r', encoding='utf-8') as f:
-            queries.append(json.load(f))
-    return queries
-
-
-def extract_citations(answer):
-    """Extract citation numbers from answer text."""
-    citations = re.findall(r'\[(\d+)\]', answer)
-    return [int(c) for c in citations]
-
-
-def calculate_stats(queries):
-    """Calculate all statistics."""
-    
-    # Collect data
-    all_rerank = []
-    all_sim = []
-    score_gaps = []
-    citation_coverage = []
-    top1_scores = []
-    
-    for query in queries:
-        rerank_scores = []
-        sim_scores = []
-        
-        for chunk in query['chunks']:
-            if chunk.get('rerank_score') is not None:
-                rerank_scores.append(chunk['rerank_score'] * 100)
-                all_rerank.append(chunk['rerank_score'] * 100)
-            
-            if chunk.get('similarity_score') is not None:
-                sim_scores.append(chunk['similarity_score'] * 100)
-                all_sim.append(chunk['similarity_score'] * 100)
-        
-        if len(rerank_scores) == len(sim_scores):
-            gaps = [r - s for r, s in zip(rerank_scores, sim_scores)]
-            score_gaps.extend(gaps)
-        
-        # Top-1 re-rank score
-        if rerank_scores:
-            top1_scores.append(rerank_scores[0])
-        
-        # Citation coverage
-        citations = set(extract_citations(query['answer']))
-        coverage = len(citations) / len(query['chunks']) if query['chunks'] else 0
-        citation_coverage.append(coverage * 100)
-    
-    return {
-        'rerank_scores': all_rerank,
-        'sim_scores': all_sim,
-        'score_gaps': score_gaps,
-        'citation_coverage': citation_coverage,
-        'top1_scores': top1_scores,
-        'num_queries': len(queries)
-    }
 
 
 DASHBOARD_TEMPLATE = '''<!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Query Statistics Dashboard</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <title>Query Results Dashboard</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f8fafc; padding: 40px; }
-        .container { max-width: 1400px; margin: 0 auto; }
-        h1 { font-size: 32px; color: #1e293b; margin-bottom: 8px; }
-        .subtitle { color: #64748b; margin-bottom: 40px; font-size: 14px; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px; margin-bottom: 40px; }
-        .card { background: white; border-radius: 12px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-        .card h3 { font-size: 14px; text-transform: uppercase; color: #64748b; margin-bottom: 16px; font-weight: 600; letter-spacing: 0.5px; }
-        .metric { font-size: 48px; font-weight: 800; color: #1e293b; margin-bottom: 8px; }
-        .metric-label { font-size: 14px; color: #64748b; }
-        .chart-container { background: white; border-radius: 12px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 24px; }
-        .chart-container h3 { font-size: 16px; color: #1e293b; margin-bottom: 20px; font-weight: 600; }
-        canvas { max-height: 300px; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; display: flex; height: 100vh; }
+        
+        .sidebar { width: 320px; background: #1e293b; color: white; padding: 24px; overflow-y: auto; }
+        .sidebar h1 { font-size: 20px; margin-bottom: 24px; }
+        .question { padding: 12px; background: #334155; border-radius: 6px; margin-bottom: 12px; cursor: pointer; font-size: 14px; transition: background 0.2s; }
+        .question:hover { background: #475569; }
+        .question.active { background: #3b82f6; }
+        
+        .main { flex: 1; display: flex; flex-direction: column; background: #f8fafc; }
+        
+        .header { background: white; border-bottom: 1px solid #e2e8f0; padding: 16px 32px; }
+        .header h2 { font-size: 18px; color: #1e293b; }
+        
+        .content { flex: 1; overflow-y: auto; padding: 32px; }
+        
+        .answer-box { background: white; border-radius: 8px; padding: 24px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .answer-box h3 { font-size: 14px; text-transform: uppercase; color: #64748b; margin-bottom: 16px; font-weight: 600; letter-spacing: 0.5px; }
+        .answer-text { line-height: 1.8; color: #334155; font-size: 15px; white-space: pre-wrap; }
+        
+        .chunks-box { background: white; border-radius: 8px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .chunks-box h3 { font-size: 14px; text-transform: uppercase; color: #64748b; margin-bottom: 16px; font-weight: 600; letter-spacing: 0.5px; }
+        
+        .chunk { background: #f8fafc; border-left: 3px solid #cbd5e1; padding: 16px; margin-bottom: 12px; border-radius: 4px; }
+        .chunk-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
+        .chunk-left { flex: 1; }
+        .chunk-rank { background: #1e293b; color: white; padding: 4px 10px; border-radius: 4px; font-size: 12px; font-weight: 600; display: inline-block; margin-bottom: 8px; }
+        .chunk-meta { font-size: 13px; color: #475569; line-height: 1.6; }
+        .chunk-meta-label { font-weight: 600; color: #64748b; }
+        .chunk-source { font-size: 12px; color: #94a3b8; margin-top: 4px; }
+        
+        .scores { display: flex; gap: 8px; margin-top: 12px; }
+        .score-badge { padding: 6px 12px; border-radius: 4px; font-size: 12px; font-weight: 600; }
+        .score-sim { background: #dbeafe; color: #1e40af; }
+        .score-rerank { background: #d1fae5; color: #065f46; }
+        .score-rerank.high { background: #10b981; color: white; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Query Statistics Dashboard</h1>
-        <p class="subtitle">Analysis of STATS_NUM_QUERIES queries with re-ranker enabled</p>
-        
-        <div class="grid">
-            <div class="card">
-                <h3>Avg Re-Rank Score</h3>
-                <div class="metric">STATS_AVG_RERANK%</div>
-                <div class="metric-label">Across all chunks</div>
-            </div>
-            
-            <div class="card">
-                <h3>Avg Score Gap</h3>
-                <div class="metric">+STATS_AVG_GAP%</div>
-                <div class="metric-label">Re-Rank over Similarity</div>
-            </div>
-            
-            <div class="card">
-                <h3>Citation Coverage</h3>
-                <div class="metric">STATS_AVG_COVERAGE%</div>
-                <div class="metric-label">Chunks cited in answers</div>
-            </div>
-            
-            <div class="card">
-                <h3>Top-1 Avg Score</h3>
-                <div class="metric">STATS_TOP1_AVG%</div>
-                <div class="metric-label">First chunk confidence</div>
-            </div>
+    <div class="sidebar">
+        <h1>Questions</h1>
+        <div id="questions"></div>
+    </div>
+    
+    <div class="main">
+        <div class="header">
+            <h2 id="current-question"></h2>
         </div>
         
-        <div class="chart-container">
-            <h3>Re-Rank vs Similarity Score Distribution</h3>
-            <canvas id="scoreDistChart"></canvas>
-        </div>
-        
-        <div class="chart-container">
-            <h3>Score Gap Distribution (Re-Rank - Similarity)</h3>
-            <canvas id="gapChart"></canvas>
-        </div>
-        
-        <div class="chart-container">
-            <h3>Citation Coverage per Query</h3>
-            <canvas id="citationChart"></canvas>
+        <div class="content">
+            <div class="answer-box">
+                <h3>Answer</h3>
+                <div class="answer-text" id="answer"></div>
+            </div>
+            
+            <div class="chunks-box">
+                <h3>Retrieved Chunks</h3>
+                <div id="chunks"></div>
+            </div>
         </div>
     </div>
 
     <script>
-        const stats = STATS_DATA_PLACEHOLDER;
+        const data = DATA_PLACEHOLDER;
+        let currentQ = 0;
 
-        // Score Distribution Chart
-        const ctx1 = document.getElementById('scoreDistChart');
-        new Chart(ctx1, {
-            type: 'scatter',
-            data: {
-                datasets: [{
-                    label: 'Similarity vs Re-Rank',
-                    data: stats.score_pairs,
-                    backgroundColor: 'rgba(59, 130, 246, 0.6)'
-                }]
-            },
-            options: {
-                responsive: true,
-                scales: {
-                    x: { title: { display: true, text: 'Similarity Score (%)' }, min: 0, max: 100 },
-                    y: { title: { display: true, text: 'Re-Rank Score (%)' }, min: 0, max: 100 }
-                },
-                plugins: {
-                    tooltip: {
-                        callbacks: {
-                            label: (ctx) => `Sim: ${ctx.parsed.x.toFixed(1)}%, Rerank: ${ctx.parsed.y.toFixed(1)}%`
-                        }
-                    }
-                }
-            }
-        });
+        function init() {
+            const qDiv = document.getElementById('questions');
+            data.forEach((q, i) => {
+                const div = document.createElement('div');
+                div.className = `question ${i===0?'active':''}`;
+                div.textContent = `Q${i+1}: ${q.question.substring(0, 50)}...`;
+                div.onclick = () => loadQuestion(i);
+                qDiv.appendChild(div);
+            });
+            loadQuestion(0);
+        }
 
-        // Gap Distribution Chart
-        const ctx2 = document.getElementById('gapChart');
-        new Chart(ctx2, {
-            type: 'bar',
-            data: {
-                labels: stats.gap_bins.labels,
-                datasets: [{
-                    label: 'Number of Chunks',
-                    data: stats.gap_bins.values,
-                    backgroundColor: 'rgba(16, 185, 129, 0.6)'
-                }]
-            },
-            options: {
-                responsive: true,
-                scales: {
-                    y: { title: { display: true, text: 'Count' } }
+        function loadQuestion(idx) {
+            currentQ = idx;
+            document.querySelectorAll('.question').forEach((el, i) => {
+                el.className = i === idx ? 'question active' : 'question';
+            });
+            
+            const q = data[idx];
+            document.getElementById('current-question').textContent = q.question;
+            document.getElementById('answer').textContent = q.answer;
+            
+            const chunksDiv = document.getElementById('chunks');
+            chunksDiv.innerHTML = '';
+            
+            q.chunks.forEach(c => {
+                const div = document.createElement('div');
+                div.className = 'chunk';
+                
+                let metaHTML = `<span class="chunk-meta-label">Section:</span> ${c.section}`;
+                if (c.subsection) {
+                    metaHTML += `<br><span class="chunk-meta-label">Subsection:</span> ${c.subsection}`;
                 }
-            }
-        });
+                metaHTML += `<br><span class="chunk-meta-label">Page:</span> ${c.page}`;
+                
+                let scoresHTML = '';
+                if (c.similarity_score !== null && c.rerank_score !== null) {
+                    const sim = (c.similarity_score * 100).toFixed(0);
+                    const rerank = (c.rerank_score * 100).toFixed(0);
+                    const rerankClass = rerank > 70 ? 'high' : '';
+                    scoresHTML = `
+                        <div class="scores">
+                            <span class="score-badge score-sim">Similarity: ${sim}%</span>
+                            <span class="score-badge score-rerank ${rerankClass}">Re-Rank: ${rerank}%</span>
+                        </div>
+                    `;
+                }
+                
+                div.innerHTML = `
+                    <div class="chunk-header">
+                        <div class="chunk-left">
+                            <span class="chunk-rank">Chunk #${c.rank}</span>
+                            <div class="chunk-meta">${metaHTML}</div>
+                            <div class="chunk-source">${c.source}</div>
+                        </div>
+                    </div>
+                    ${scoresHTML}
+                `;
+                chunksDiv.appendChild(div);
+            });
+        }
 
-        // Citation Coverage Chart
-        const ctx3 = document.getElementById('citationChart');
-        new Chart(ctx3, {
-            type: 'bar',
-            data: {
-                labels: stats.query_labels,
-                datasets: [{
-                    label: 'Coverage (%)',
-                    data: stats.citation_coverage,
-                    backgroundColor: 'rgba(139, 92, 246, 0.6)'
-                }]
-            },
-            options: {
-                responsive: true,
-                scales: {
-                    y: { title: { display: true, text: 'Coverage (%)' }, min: 0, max: 100 }
-                }
-            }
-        });
+        init();
     </script>
 </body>
 </html>'''
 
 
-def generate_dashboard(queries, output_file):
-    """Generate visual statistics dashboard."""
+def load_json_files(filepaths):
+    """Load all JSON files and extract necessary data."""
+    data = []
     
-    stats = calculate_stats(queries)
+    for filepath in sorted(filepaths):  # Sort to maintain order
+        with open(filepath, 'r', encoding='utf-8') as f:
+            query_data = json.load(f)
+            
+            # Extract data
+            item = {
+                'question': query_data['question'],
+                'answer': query_data['answer'],
+                'chunks': query_data['chunks']
+            }
+            
+            data.append(item)
     
-    # Calculate summary metrics
-    avg_rerank = int(statistics.mean(stats['rerank_scores'])) if stats['rerank_scores'] else 0
-    avg_sim = int(statistics.mean(stats['sim_scores'])) if stats['sim_scores'] else 0
-    avg_gap = int(statistics.mean(stats['score_gaps'])) if stats['score_gaps'] else 0
-    avg_coverage = int(statistics.mean(stats['citation_coverage'])) if stats['citation_coverage'] else 0
-    top1_avg = int(statistics.mean(stats['top1_scores'])) if stats['top1_scores'] else 0
+    return data
+
+
+def generate_dashboard(input_files, output_file):
+    """Generate HTML dashboard from JSON files."""
     
-    # Prepare data for charts
+    print(f"Loading {len(input_files)} JSON files...")
+    data = load_json_files(input_files)
     
-    # Score pairs for scatter plot
-    score_pairs = []
-    for i in range(min(len(stats['rerank_scores']), len(stats['sim_scores']))):
-        score_pairs.append({
-            'x': stats['sim_scores'][i],
-            'y': stats['rerank_scores'][i]
-        })
-    
-    # Gap distribution bins
-    gap_bins = {
-        '<-20%': 0,
-        '-20 to -10%': 0,
-        '-10 to 0%': 0,
-        '0 to +10%': 0,
-        '+10 to +20%': 0,
-        '>+20%': 0
-    }
-    
-    for gap in stats['score_gaps']:
-        if gap < -20:
-            gap_bins['<-20%'] += 1
-        elif gap < -10:
-            gap_bins['-20 to -10%'] += 1
-        elif gap < 0:
-            gap_bins['-10 to 0%'] += 1
-        elif gap < 10:
-            gap_bins['0 to +10%'] += 1
-        elif gap < 20:
-            gap_bins['+10 to +20%'] += 1
-        else:
-            gap_bins['>+20%'] += 1
-    
-    # Query labels
-    query_labels = [f"Q{i+1}" for i in range(len(stats['citation_coverage']))]
-    
-    chart_data = {
-        'score_pairs': score_pairs,
-        'gap_bins': {
-            'labels': list(gap_bins.keys()),
-            'values': list(gap_bins.values())
-        },
-        'citation_coverage': stats['citation_coverage'],
-        'query_labels': query_labels
-    }
+    print(f"Generating dashboard with {len(data)} questions...")
     
     # Generate HTML
-    html = DASHBOARD_TEMPLATE
-    html = html.replace('STATS_NUM_QUERIES', str(stats['num_queries']))
-    html = html.replace('STATS_AVG_RERANK', str(avg_rerank))
-    html = html.replace('STATS_AVG_GAP', str(avg_gap))
-    html = html.replace('STATS_AVG_COVERAGE', str(avg_coverage))
-    html = html.replace('STATS_TOP1_AVG', str(top1_avg))
-    html = html.replace('STATS_DATA_PLACEHOLDER', json.dumps(chart_data, indent=2))
+    html = DASHBOARD_TEMPLATE.replace('DATA_PLACEHOLDER', json.dumps(data, indent=2))
     
     # Save
     with open(output_file, 'w', encoding='utf-8') as f:
         f.write(html)
     
-    print(f"✅ Stats dashboard generated: {output_file}")
-    print(f"   Queries analyzed: {stats['num_queries']}")
-    print(f"   Avg Re-Rank Score: {avg_rerank}%")
-    print(f"   Avg Score Gap: +{avg_gap}%")
-    print(f"   Avg Citation Coverage: {avg_coverage}%")
+    print(f"✅ Dashboard generated: {output_file}")
+    print(f"   Questions included: {len(data)}")
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Generate visual statistics dashboard')
-    parser.add_argument('--input', nargs='+', required=True, help='Query JSON files')
-    parser.add_argument('--output', default='stats_dashboard.html', help='Output HTML file')
+    parser = argparse.ArgumentParser(description='Generate dashboard from multiple query JSON files')
+    parser.add_argument('--input', nargs='+', required=True, help='JSON files to include')
+    parser.add_argument('--output', default='dashboard.html', help='Output HTML file')
     
     args = parser.parse_args()
     
-    print(f"Loading {len(args.input)} query files...")
-    queries = load_query_files(args.input)
-    
-    generate_dashboard(queries, args.output)
+    generate_dashboard(args.input, args.output)
 
 
 if __name__ == '__main__':
@@ -313,5 +204,5 @@ if __name__ == '__main__':
 
 
 # USAGE:
-# python generate_stats_dashboard.py --input query_outputs/*.json
-# python generate_stats_dashboard.py --input query_outputs/*.json --output my_stats.html
+# python generate_multi_dashboard.py --input run4/*.json --output my_dashboard.html
+# python generate_multi_dashboard.py --input run4/query_*.json --output results.html
