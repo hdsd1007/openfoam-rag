@@ -1,0 +1,60 @@
+What is the purpose of the runTimeModifiable keyword in the controlDict file?
+How does OpenFOAM handle keyword lookups if a specific keyword does not exist in a dictionary?
+Which directory typically contains the transportProperties and turbulenceProperties dictionaries?
+Explain the syntax and use of "hash brackets" (#{ ... #}) for writing code in OpenFOAM dictionaries.
+What is the role of the foamDictionary utility when used with the -expand option?
+In which directory are the point, face, and cell data files stored after mesh generation?
+How can a user quickly jump to the $FOAM_SOLVERS directory from the command line?
+What is the standard file format for OpenFOAM data (e.g., ASCII or binary)?
+What information is provided by the Ux_0 and UxFinalRes values in the solver output?
+Describe the function of the libs entry in the controlDict file.
+What is the difference between a borderEdge and a borderPoint in the surfaceSplitNonManifolds utility?
+How is mesh grading defined in a blockMeshDict for a specific block?
+What does the maxNonOrtho keyword control during a mesh check or mapping operation?
+Which utility is used to convert OpenFOAM mesh and data into Fluent format?
+Explain the purpose of the extrude2DMesh utility.
+How does the mapFields utility handle the transfer of data between different geometries?
+What are the key validity constraints for a "face" in the OpenFOAM mesh description?
+Which utility is used to split a surface at multiply connected edges?
+How do you define a "wedge" boundary condition for 2D axisymmetric cases?
+What is the role of the topoSetSource when defining regions for field initialization?
+Which sub-dictionary in fvSchemes defines the schemes for time derivatives?
+What is the default discretization scheme for a laplacianScheme in most tutorial cases?
+Explain the "PIMPLE" algorithm's approach to pressure-velocity coupling compared to "SIMPLE."
+What is the function of the cellLimited keyword in a gradient scheme?
+Describe the use of the steadyState keyword within the ddtSchemes dictionary.
+How are second-time derivatives $(\partial^2/\partial t^2)$ specified in the fvSchemes file?
+What does the interpolationSchemes sub-dictionary control?
+Which keyword is used to apply a limiter to a divergence scheme, such as limitedLinear?
+What is the role of underRelaxation in the fvSolution dictionary?
+How is the snGradSchemes (surface normal gradient) typically configured for orthogonal meshes?
+What is the purpose of the fixedFluxPressure boundary condition?
+Define the traction boundary condition as used in solid mechanics tutorials.
+How do you specify the density and Young's modulus for a solid stress analysis case?
+What is the "empty" patch type used for in OpenFOAM?
+How is the "wall" boundary condition different from a standard "patch" type?
+Describe the use of the setFields utility for initializing a multiphase problem.
+Where is the mechanicalProperties dictionary located in a stress analysis case?
+What physical model does the VoFSolver use to capture the interface between immiscible fluids?
+How is a "jump" condition (like a pressure drop) specified at a cyclic boundary?
+What is the purpose of the equilibriumFlameT utility?
+What utility is used to reconstruct a decomposed mesh after a parallel run?
+How can a user post-process a specific processor's directory without reconstructing the whole case?
+Describe the function of the sampling library during a simulation.
+What is the role of the reconstructPar utility?
+How does the foamPostProcess utility assist in calculating wall boiling properties?
+Which utility can be used to generate graph data (like stress along a line) during post-processing?
+What are the standard sampling types available for data extraction (e.g., uniform, points)?
+How do you run an OpenFOAM application in parallel using MPI?
+What is the function of the probes utility in post-processing?
+Explain the use of the reconstructParMesh utility.
+What is the standard C++ tool used to compile OpenFOAM applications and libraries?
+Which environment variable points to the OpenFOAM project directory?
+Explain the symmetry definition for a rank 3 tensor in OpenFOAM.
+What is the purpose of the .H header files in OpenFOAM application source code?
+Describe the compilation difference between the exe and libso arguments in wmake.
+Which base class is used for the solution of immiscible fluids using the VOF approach?
+What are the S.I. base units used for measurement in OpenFOAM?
+How is the Courant number $(Co)$ calculated and monitored within solvers?
+What is the function of the volField<Type> template class?
+Explain the use of the differential operators (gradient, divergence) in the OpenFOAM C++ API.

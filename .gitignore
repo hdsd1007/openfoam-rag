@@ -2,6 +2,8 @@
 data/
 outputs/
 runs/
+src/eval/Eval-Questions.docx
+src/eval/RAG Evaluation.pdf
 
 # Ignore the local vector database
 db/
