@@ -15,36 +15,25 @@ from src.rag.pipeline_e2e import ask_openfoam
 from src.router.query_router import QueryRouter
 from src.router.vision_extractor import VisionExtractor
 
-def main():
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--q", required=True, help="Text query or path to image containing OpenFOAM error")
-    parser.add_argument("--parser", required=True, choices=["docling", "marker", "pymupdf"])
-    parser.add_argument("--img", help="Optional: Image path to combine with text query")
-    parser.add_argument("--verbose", action="store_true", help="Show retrieved chunks and metadata for debugging")
-    parser.add_argument("--save", action="store_true", help="Save output to JSON file for dashboard")
-    parser.add_argument("--output-dir", default="query_outputs", help="Directory to save outputs")
-    args = parser.parse_args()
-
-    vector_db = load_vector_db(args.parser)
-    llm = load_generator_llm()
+def process_single_question(question, vector_db, llm, router, args):
+    """Process a single question and return results."""
     
-    # Initialize Multimodal Router
-    vision_extractor = VisionExtractor() # You can pass Model and Device Type
-    router = QueryRouter(vision_extractor)
+    # Route the query
     if args.img:
-        # Multimodal: text + image
-        normalized_query = router.route((args.q, args.img))
+        normalized_query = router.route((question, args.img))
     else:
-        # Original: text only or image only
-        normalized_query = router.route(args.q)
-
-    # Verbose (Showing Retrieved Chunks)
+        normalized_query = router.route(question)
+    
+    # Get response and chunks
+    response, docs = ask_openfoam(normalized_query, vector_db, llm, return_context=True)
+    
+    # Print response
+    print("RESPONSE:\n")
+    print(response)
+    print("\n")
+    
+    # Verbose mode
     if args.verbose:
-        response, docs = ask_openfoam(normalized_query, vector_db, llm, return_context=True)
-        print("RESPONSE:\n")
-        print(response)
-        print("\n")
         print("RETRIEVED CHUNKS (for debugging):")
         print("="*80)
         for i, doc in enumerate(docs, 1):
@@ -52,50 +41,116 @@ def main():
             print(f"Metadata: {doc.metadata}")
             print(f"Content preview: {doc.page_content[:300]}...")
             print("-"*80)
+    
+    # Prepare output data
+    chunks = []
+    for i, doc in enumerate(docs, 1):
+        chunk_data = {
+            "rank": i,
+            "section": doc.metadata.get('section', 'N/A'),
+            "subsection": doc.metadata.get('subsection'),
+            "page": doc.metadata.get('page', 'N/A'),
+            "source": doc.metadata.get('source', 'Unknown'),
+            "similarity_score": doc.metadata.get('similarity_score'),
+            "rerank_score": doc.metadata.get('rerank_score'),
+            "content_preview": doc.page_content[:300]
+        }
+        chunks.append(chunk_data)
+    
+    output = {
+        "question": question,
+        "normalized_query": normalized_query if args.img else question,
+        "answer": response,
+        "chunks": chunks,
+        "timestamp": datetime.now().isoformat(),
+        "parser": args.parser,
+        "has_reranker": any(c["rerank_score"] is not None for c in chunks)
+    }
+    
+    return output
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--q", help="Single text query")
+    parser.add_argument("--questions", help="Path to text file with questions (one per line)")
+    parser.add_argument("--parser", required=True, choices=["docling", "marker", "pymupdf"])
+    parser.add_argument("--img", help="Optional: Image path to combine with text query")
+    parser.add_argument("--verbose", action="store_true", help="Show retrieved chunks")
+    parser.add_argument("--save", action="store_true", help="Save output to JSON")
+    parser.add_argument("--output-dir", default="query_outputs", help="Directory to save outputs")
+    args = parser.parse_args()
+    
+    # Validate input
+    if not args.q and not args.questions:
+        print("Error: Must provide either --q or --questions")
+        return
+    
+    if args.q and args.questions:
+        print("Error: Cannot use both --q and --questions together")
+        return
+    
+    # Load resources once
+    print("Loading vector database and LLM...")
+    vector_db = load_vector_db(args.parser)
+    llm = load_generator_llm()
+    vision_extractor = VisionExtractor()
+    router = QueryRouter(vision_extractor)
+    
+    # Get questions list
+    if args.questions:
+        # Read from file
+        with open(args.questions, 'r', encoding='utf-8') as f:
+            questions = [line.strip() for line in f if line.strip()]
+        print(f"\n📋 Processing {len(questions)} questions from {args.questions}\n")
     else:
-        response = ask_openfoam(normalized_query, vector_db, llm)
-        print(response)
+        # Single question
+        questions = [args.q]
+    
+    # Process questions
+    all_outputs = []
+    
+    for i, question in enumerate(questions, 1):
+        if len(questions) > 1:
+            print("="*80)
+            print(f"QUESTION {i}/{len(questions)}: {question}")
+            print("="*80)
         
-    # Saving to JSON
+        output = process_single_question(question, vector_db, llm, router, args)
+        all_outputs.append(output)
+        
+        if len(questions) > 1:
+            print("\n")
+    
+    # Save outputs
     if args.save:
         output_dir = Path(args.output_dir)
         output_dir.mkdir(exist_ok=True)
         
-        # Format chunks for JSON
-        chunks = []
-        for i, doc in enumerate(docs, 1):
-            chunk_data = {
-                "rank": i,
-                "section": doc.metadata.get('section', 'N/A'),
-                "subsection": doc.metadata.get('subsection'),
-                "page": doc.metadata.get('page', 'N/A'),
-                "source": doc.metadata.get('source', 'Unknown'),
-                "similarity_score": doc.metadata.get('similarity_score'),
-                "rerank_score": doc.metadata.get('rerank_score'),
-                "content_preview": doc.page_content[:300]
-            }
-            chunks.append(chunk_data)
+        if len(questions) == 1:
+            # Single file
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"query_{timestamp}.json"
+            filepath = output_dir / filename
+            
+            with open(filepath, 'w', encoding='utf-8') as f:
+                json.dump(all_outputs[0], f, indent=2, ensure_ascii=False)
+            
+            print(f"✅ Output saved to: {filepath}")
         
-        # Create output structure
-        output = {
-            "question": args.q,
-            "normalized_query": normalized_query if args.img else args.q,
-            "answer": response,
-            "chunks": chunks,
-            "timestamp": datetime.now().isoformat(),
-            "parser": args.parser,
-            "has_reranker": any(c["rerank_score"] is not None for c in chunks)
-        }
-        
-        # Generate filename
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"query_{timestamp}.json"
-        filepath = output_dir / filename
-        
-        with open(filepath, 'w', encoding='utf-8') as f:
-            json.dump(output, f, indent=2, ensure_ascii=False)
-        
-        print(f"\n✅ Output saved to: {filepath}")
+        else:
+            # Multiple files
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            
+            for i, output in enumerate(all_outputs, 1):
+                filename = f"query_{timestamp}_{i:02d}.json"
+                filepath = output_dir / filename
+                
+                with open(filepath, 'w', encoding='utf-8') as f:
+                    json.dump(output, f, indent=2, ensure_ascii=False)
+            
+            print(f"✅ {len(all_outputs)} outputs saved to: {output_dir}")
+            print(f"   Files: query_{timestamp}_01.json to query_{timestamp}_{len(all_outputs):02d}.json")
 
 
 if __name__ == "__main__":
@@ -130,3 +185,12 @@ if __name__ == "__main__":
 
 # Custom output directory:
 # python ask.py --parser marker --q "Explain fvSchemes" --save --output-dir my_queries
+
+# Single question with save:
+# python ask.py --parser marker --q "Explain fvSchemes" --save
+
+# Multiple questions from file:
+# python ask.py --parser marker --questions questions.txt --save
+
+# Multiple questions with verbose:
+# python ask.py --parser marker --questions questions.txt --save --verbose
