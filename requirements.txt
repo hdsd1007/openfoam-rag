@@ -11,4 +11,7 @@ langchain-community
 transformers 
 bitsandbytes 
 accelerate
+rouge-score
+ragas
+datasets
 

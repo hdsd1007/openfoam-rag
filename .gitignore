@@ -4,6 +4,13 @@ outputs/
 runs/
 src/eval/Eval-Questions.docx
 src/eval/RAG Evaluation.pdf
+prompt.txt
+research_paper.md
+research_paper.tex
+skills.md
+CLAUDE.md
+acl_latex.tex
+images/
 
 # Ignore the local vector database
 db/
