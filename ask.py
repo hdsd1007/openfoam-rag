@@ -16,7 +16,7 @@ from src.router.query_router import QueryRouter
 from src.router.vision_extractor import VisionExtractor
 from sentence_transformers import CrossEncoder
 
-def process_single_question(question, vector_db, llm, router, args):
+def process_single_question(question, vector_db, llm, reranker, router, args):
     """Process a single question and return results."""
     
     # Route the query
@@ -26,7 +26,7 @@ def process_single_question(question, vector_db, llm, router, args):
         normalized_query = router.route(question)
     
     # Get response and chunks
-    response, docs = ask_openfoam(normalized_query, vector_db, llm, return_context=True)
+    response, docs = ask_openfoam(normalized_query, vector_db, llm, reranker, return_context=True)
     
     # Print response
     print("RESPONSE:\n")
