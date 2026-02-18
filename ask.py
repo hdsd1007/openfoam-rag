@@ -14,6 +14,7 @@ from src.llm.load_generator_llm import load_generator_llm
 from src.rag.pipeline_e2e import ask_openfoam
 from src.router.query_router import QueryRouter
 from src.router.vision_extractor import VisionExtractor
+from sentence_transformers import CrossEncoder
 
 def process_single_question(question, vector_db, llm, router, args):
     """Process a single question and return results."""
@@ -94,8 +95,13 @@ def main():
     print("Loading vector database and LLM...")
     vector_db = load_vector_db(args.parser)
     llm = load_generator_llm()
-    vision_extractor = VisionExtractor()
-    router = QueryRouter(vision_extractor)
+    reranker = CrossEncoder('BAAI/bge-reranker-base',device='cpu')
+    # With this:
+    if args.img:
+        vision_extractor = VisionExtractor()
+        router = QueryRouter(vision_extractor)
+    else:
+        router = QueryRouter(None)
     
     # Get questions list
     if args.questions:
@@ -116,7 +122,7 @@ def main():
             print(f"QUESTION {i}/{len(questions)}: {question}")
             print("="*80)
         
-        output = process_single_question(question, vector_db, llm, router, args)
+        output = process_single_question(question, vector_db, llm, reranker, router, args)
         all_outputs.append(output)
         
         if len(questions) > 1:

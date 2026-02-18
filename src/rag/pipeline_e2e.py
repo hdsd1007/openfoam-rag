@@ -1,7 +1,6 @@
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
-from sentence_transformers import CrossEncoder
 
 def format_context_with_metadata(docs):
     """
@@ -41,7 +40,7 @@ def format_context_with_metadata(docs):
     return "\n" + "="*80 + "\n".join(context_parts)
 
 
-def ask_openfoam(query, vector_db, llm, return_context=False):
+def ask_openfoam(query, vector_db, llm, reranker,return_context=False):
 
     # Retrieve top-k most relevant chunks
     # retriever = vector_db.as_retriever(search_kwargs={"k": 5})
@@ -56,7 +55,7 @@ def ask_openfoam(query, vector_db, llm, return_context=False):
         initial_docs.append(doc)
         
     # Stage 2 => Re-Ranking using Cross-Encoder K = 5
-    reranker = CrossEncoder('BAAI/bge-reranker-base')
+    # reranker = CrossEncoder('BAAI/bge-reranker-base',device='cpu')
     
     # Prepare query-chunk pairs for the re-ranker
     pairs = [[query, doc.page_content] for doc in initial_docs]
