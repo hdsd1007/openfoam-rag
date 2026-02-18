@@ -41,7 +41,7 @@ from rouge_score import rouge_scorer
 
 # ── RAGAS ──────────────────────────────────────────────────────────────────────
 from ragas import evaluate as ragas_evaluate
-from ragas.metrics import faithfulness, answer_relevancy, context_precision
+from ragas.metrics import faithfulness, answer_relevancy, context_relevancy
 from ragas.metrics import answer_correctness          # needs reference
 from datasets import Dataset
 
@@ -172,7 +172,7 @@ def compute_ragas(dataset: Dataset, use_reference: bool, llm=None, embeddings=No
     llm and embeddings: if None, RAGAS uses its default (OpenAI).
     If you're using Gemini, pass your LangChain LLM wrapper and embeddings here.
     """
-    metrics = [faithfulness, answer_relevancy, context_precision]
+    metrics = [faithfulness, answer_relevancy, context_relevancy]
     if use_reference and 'ground_truth' in dataset.column_names:
         metrics.append(answer_correctness)
 
@@ -353,7 +353,7 @@ if __name__ == '__main__':
 # ==============================================================================
 #
 # 1. Reference-free only (no ground truth needed):
-#    python evaluate.py --input query_outputs/*.json --no-reference --output eval_report.json
+#    clear
 #
 # 2. Full evaluation with ground truth references:
 #    python evaluate.py --input query_outputs/*.json --references questions.tsv --output eval_report.json
