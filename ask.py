@@ -53,7 +53,7 @@ def process_single_question(question, vector_db, llm, router, args):
             "source": doc.metadata.get('source', 'Unknown'),
             "similarity_score": doc.metadata.get('similarity_score'),
             "rerank_score": doc.metadata.get('rerank_score'),
-            "content_preview": doc.page_content[:300]
+            "content_preview": doc.page_content[:]
         }
         chunks.append(chunk_data)
     
