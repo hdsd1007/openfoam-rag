@@ -26,7 +26,7 @@ def load_generator_llm(max_tokens: int = 2048):
         )
 
     llm = ChatGoogleGenerativeAI(
-        model="gemini-2.0-flash",  # More rigorous for evaluation
+        model="gemini-2.5-flash",  # More rigorous for evaluation
         temperature=0.2,  # Deterministic for judging
         max_output_tokens=max_tokens,
         google_api_key=api_key
