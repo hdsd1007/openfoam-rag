@@ -197,6 +197,135 @@ def compute_source_diversity(queries):
     }
 
 
+# ── Report Evaluation Metrics ─────────────────────────────────────────────────
+
+def _safe_stats(vals):
+    """Compute mean/median/std/min/max from a list, handling edge cases."""
+    if not vals:
+        return {"mean": None, "median": None, "std": None, "min": None, "max": None}
+    return {
+        "mean":   round2(statistics.mean(vals)),
+        "median": round2(statistics.median(vals)),
+        "std":    round2(statistics.stdev(vals) if len(vals) > 1 else 0),
+        "min":    round2(min(vals)),
+        "max":    round2(max(vals)),
+    }
+
+
+def compute_report_metrics(eval_results):
+    """
+    Aggregate 6 judge dimensions across all report prompts.
+
+    Args:
+        eval_results: List of evaluation result dicts (from evaluate.py output).
+
+    Returns:
+        Dict with per-dimension stats (mean, median, std, min, max)
+        and overall_score stats.
+    """
+    dimensions = [
+        "groundedness", "technical_accuracy", "citation_correctness",
+        "coverage", "factual_recall", "structure",
+    ]
+    dim_values = {d: [] for d in dimensions}
+    overall_scores = []
+
+    # Track section/fact coverage
+    total_expected_sections = 0
+    total_found_sections = 0
+    total_expected_facts = 0
+    total_found_facts = 0
+
+    for entry in eval_results:
+        report_data = entry.get("report", {})
+        eval_data = report_data.get("evaluation", {})
+
+        if "error" in eval_data:
+            continue
+
+        for dim in dimensions:
+            val = eval_data.get(dim)
+            if val is not None:
+                dim_values[dim].append(val)
+
+        overall = eval_data.get("overall_score")
+        if overall is not None:
+            overall_scores.append(overall)
+
+        # Section/fact tracking
+        sections_found = eval_data.get("sections_found", [])
+        sections_missing = eval_data.get("sections_missing", [])
+        facts_found = eval_data.get("facts_found", [])
+        facts_missing = eval_data.get("facts_missing", [])
+
+        total_found_sections += len(sections_found)
+        total_expected_sections += len(sections_found) + len(sections_missing)
+        total_found_facts += len(facts_found)
+        total_expected_facts += len(facts_found) + len(facts_missing)
+
+    result = {
+        "total_prompts": len(eval_results),
+        "successful_judges": len(overall_scores),
+    }
+
+    for dim in dimensions:
+        result[dim] = _safe_stats(dim_values[dim])
+
+    result["overall_score"] = _safe_stats(overall_scores)
+
+    result["section_coverage"] = {
+        "total_expected": total_expected_sections,
+        "total_found": total_found_sections,
+        "rate": round2(total_found_sections / total_expected_sections) if total_expected_sections > 0 else 0,
+    }
+
+    result["fact_coverage"] = {
+        "total_expected": total_expected_facts,
+        "total_found": total_found_facts,
+        "rate": round2(total_found_facts / total_expected_facts) if total_expected_facts > 0 else 0,
+    }
+
+    return result
+
+
+def compute_retrieval_ir_metrics(eval_results):
+    """
+    Aggregate IR retrieval metrics (Recall@k, MRR, NDCG) across all prompts.
+
+    Args:
+        eval_results: List of evaluation result dicts (from evaluate.py output).
+
+    Returns:
+        Dict with per-metric stats (mean, median, std, min, max).
+    """
+    metric_names = [
+        "recall@5", "recall@10", "recall@15", "recall@20",
+        "MRR", "NDCG@10", "NDCG@20",
+    ]
+    metric_values = {m: [] for m in metric_names}
+
+    for entry in eval_results:
+        report_data = entry.get("report", {})
+        ir_metrics = report_data.get("retrieval_metrics", {})
+
+        if not ir_metrics:
+            continue
+
+        for m in metric_names:
+            val = ir_metrics.get(m)
+            if val is not None:
+                metric_values[m].append(val)
+
+    result = {
+        "prompts_with_relevant_pages": len(metric_values["recall@5"]),
+    }
+
+    for m in metric_names:
+        result[m] = _safe_stats(metric_values[m])
+
+    return result
+
+
 # ── Main Report Builder ────────────────────────────────────────────────────────
 
 def build_report(queries, label):
@@ -219,33 +348,36 @@ def build_report(queries, label):
 
 def main():
     parser = argparse.ArgumentParser(description='Postprocess query JSONs into structured stats JSON.')
-    parser.add_argument('--input',  nargs='+', required=True, help='Query JSON files')
-    parser.add_argument('--output', required=True,            help='Output JSON report path')
-    parser.add_argument('--label',  default=None,             help='Run label (e.g. run5_marker). Auto-detected from folder if omitted.')
+    parser.add_argument('--input',  nargs='+', required=False, help='Query JSON files')
+    parser.add_argument('--output', required=True,             help='Output JSON report path')
+    parser.add_argument('--label',  default=None,              help='Run label (e.g. run5_marker). Auto-detected from folder if omitted.')
+    parser.add_argument('--eval-results', default=None,        help='Evaluation JSON from evaluate.py (for report/IR metrics)')
     args = parser.parse_args()
 
-    # Auto-detect label from parent folder of first input file if not given
-    label = args.label or Path(args.input[0]).parent.name
+    if not args.input and not args.eval_results:
+        print("Error: Must provide either --input or --eval-results")
+        return
 
-    print(f"Loading {len(args.input)} query files...")
-    queries = load_query_files(args.input)
-    print(f"Building report for: {label} ({len(queries)} queries)")
+    combined_report = {}
 
-    report = build_report(queries, label)
+    # Standard query postprocessing
+    if args.input:
+        label = args.label or Path(args.input[0]).parent.name
 
-    with open(args.output, 'w', encoding='utf-8') as f:
-        json.dump(report, f, indent=2, ensure_ascii=False)
+        print(f"Loading {len(args.input)} query files...")
+        queries = load_query_files(args.input)
+        print(f"Building report for: {label} ({len(queries)} queries)")
 
-    print(f"✅ Report saved to: {args.output}")
+        combined_report = build_report(queries, label)
 
-    # Print a quick summary to stdout
-    m  = report['meta']
-    rs = report['retrieval_scores']
-    pd = report['position_degradation']
-    cc = report['citation_coverage']
-    sd = report['source_diversity']
+        # Print a quick summary to stdout
+        m  = combined_report['meta']
+        rs = combined_report['retrieval_scores']
+        pd = combined_report['position_degradation']
+        cc = combined_report['citation_coverage']
+        sd = combined_report['source_diversity']
 
-    print(f"""
+        print(f"""
 ┌─ SUMMARY: {label} ({'reranker' if m['has_reranker'] else 'no reranker'}, k={m['k_retrieved']}) ──────────────
 │ Queries: {m['total_queries']}   Abstained: {cc['abstained_count']} ({cc['abstained_pct']}%)
 │
@@ -266,6 +398,55 @@ def main():
 └──────────────────────────────────────────────────────────────────────────────
 """)
 
+    # Evaluation results postprocessing (report pipeline metrics)
+    if args.eval_results:
+        print(f"\nLoading evaluation results from {args.eval_results}...")
+        with open(args.eval_results, 'r', encoding='utf-8') as f:
+            eval_results = json.load(f)
+
+        report_metrics = compute_report_metrics(eval_results)
+        ir_metrics = compute_retrieval_ir_metrics(eval_results)
+
+        combined_report["report_evaluation"] = report_metrics
+        combined_report["retrieval_ir_metrics"] = ir_metrics
+
+        # Print evaluation summary
+        rm = report_metrics
+        print(f"""
+┌─ REPORT EVALUATION SUMMARY ──────────────────────────────────────────────────
+│ Prompts: {rm['total_prompts']}   Successful judges: {rm['successful_judges']}
+│
+│ Overall Score:   mean={rm['overall_score'].get('mean','N/A')}  median={rm['overall_score'].get('median','N/A')}
+│ Groundedness:    mean={rm['groundedness'].get('mean','N/A')}
+│ Tech Accuracy:   mean={rm['technical_accuracy'].get('mean','N/A')}
+│ Citation:        mean={rm['citation_correctness'].get('mean','N/A')}
+│ Coverage:        mean={rm['coverage'].get('mean','N/A')}
+│ Factual Recall:  mean={rm['factual_recall'].get('mean','N/A')}
+│ Structure:       mean={rm['structure'].get('mean','N/A')}
+│
+│ Section Coverage: {rm['section_coverage']['total_found']}/{rm['section_coverage']['total_expected']} ({rm['section_coverage']['rate']})
+│ Fact Coverage:    {rm['fact_coverage']['total_found']}/{rm['fact_coverage']['total_expected']} ({rm['fact_coverage']['rate']})
+└──────────────────────────────────────────────────────────────────────────────
+""")
+
+        if ir_metrics.get("prompts_with_relevant_pages", 0) > 0:
+            print(f"""
+┌─ IR RETRIEVAL METRICS ───────────────────────────────────────────────────────
+│ Prompts with relevant_pages: {ir_metrics['prompts_with_relevant_pages']}
+│ Recall@5:  mean={ir_metrics['recall@5'].get('mean','N/A')}
+│ Recall@10: mean={ir_metrics['recall@10'].get('mean','N/A')}
+│ Recall@20: mean={ir_metrics['recall@20'].get('mean','N/A')}
+│ MRR:       mean={ir_metrics['MRR'].get('mean','N/A')}
+│ NDCG@10:   mean={ir_metrics['NDCG@10'].get('mean','N/A')}
+│ NDCG@20:   mean={ir_metrics['NDCG@20'].get('mean','N/A')}
+└──────────────────────────────────────────────────────────────────────────────
+""")
+
+    with open(args.output, 'w', encoding='utf-8') as f:
+        json.dump(combined_report, f, indent=2, ensure_ascii=False)
+
+    print(f"Report saved to: {args.output}")
+
 
 if __name__ == '__main__':
     main()
@@ -277,6 +458,12 @@ if __name__ == '__main__':
 #
 # Run 5 (k=10 reranker):
 #   python postprocess.py --input run5_marker/*.json --output run5_stats.json --label run5_marker
+#
+# Evaluation results (report pipeline):
+#   python postprocess.py --eval-results eval_results/marker_report_evaluation.json --output report_stats.json
+#
+# Combined (query stats + evaluation):
+#   python postprocess.py --input run4_marker/*.json --eval-results eval_results/marker_report_evaluation.json --output combined_stats.json
 #
 # Then feed both JSONs to an LLM to generate comparison tables:
 #   "Here are two RAG pipeline evaluation reports. Generate a LaTeX comparison table."

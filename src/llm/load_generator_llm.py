@@ -7,12 +7,16 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 
 
 
-def load_generator_llm():
+def load_generator_llm(max_tokens: int = 2048):
     """
     Load Gemini Pro for RAG evaluation.
     Uses same API key as generator.
+
+    Args:
+        max_tokens: Maximum output tokens. Default 2048 for single-query,
+                    use 8192 for report generation.
     """
-    
+
     api_key = os.getenv("GOOGLE_API_KEY")
     if not api_key:
         raise ValueError(
@@ -20,14 +24,14 @@ def load_generator_llm():
             "In Kaggle: Add it as a secret in Notebook Settings > Add-ons > Secrets.\n"
             "Locally: export GOOGLE_API_KEY='your-key'"
         )
-    
+
     llm = ChatGoogleGenerativeAI(
         model="gemini-2.0-flash",  # More rigorous for evaluation
         temperature=0.2,  # Deterministic for judging
-        max_output_tokens=2048,
+        max_output_tokens=max_tokens,
         google_api_key=api_key
     )
-    
+
     return llm
 
 # def load_generator_llm():

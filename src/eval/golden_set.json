@@ -1,0 +1,274 @@
+[
+  {
+    "id": "R01",
+    "prompt": "Write a technical overview of the discretization framework in OpenFOAM, covering spatial and temporal schemes, the fvSchemes dictionary structure, and how users configure gradient, divergence, Laplacian, interpolation, and surface normal gradient schemes.",
+    "type": "report",
+    "expected_sections": [
+      "Spatial Discretization",
+      "Temporal Discretization",
+      "Gradient Schemes",
+      "Divergence Schemes",
+      "Laplacian Schemes",
+      "Interpolation and Surface Normal Gradient Schemes",
+      "fvSchemes Dictionary Structure"
+    ],
+    "must_include_facts": [
+      "fvSchemes is located in the system directory of an OpenFOAM case",
+      "ddtSchemes sub-dictionary controls time derivative discretization",
+      "steadyState keyword disables time derivative terms",
+      "Gauss integration is the standard method for divergence and Laplacian schemes",
+      "cellLimited keyword applies a gradient limiter to prevent overshoots",
+      "snGradSchemes controls surface normal gradient calculation",
+      "interpolationSchemes defines how values are interpolated from cell centres to face centres",
+      "limitedLinear is a bounded divergence scheme limiter"
+    ],
+    "relevant_pages": [],
+    "relevant_sections": [
+      "4.4 Numerical schemes",
+      "4.4.1 Interpolation schemes",
+      "4.4.2 Surface normal gradient schemes",
+      "4.4.3 Gradient schemes",
+      "4.4.4 Laplacian schemes",
+      "4.4.5 Divergence schemes",
+      "4.4.6 Time schemes"
+    ]
+  },
+  {
+    "id": "R02",
+    "prompt": "Write a technical report on mesh generation and validation in OpenFOAM, covering blockMesh usage, block and grading definitions, mesh quality checks, face validity constraints, and how mesh data is stored on disk.",
+    "type": "report",
+    "expected_sections": [
+      "blockMesh Overview",
+      "Block and Grading Definition",
+      "Mesh Quality Checks",
+      "Face Validity Constraints",
+      "Mesh Data Storage"
+    ],
+    "must_include_facts": [
+      "blockMeshDict defines the mesh topology with vertices, blocks, edges, and boundary patches",
+      "Grading controls the expansion ratio of cells along block edges",
+      "maxNonOrtho keyword controls non-orthogonality checking during mesh validation",
+      "Face validity requires that face area vectors point outward from the cell",
+      "Point, face, and cell data files are stored in the constant/polyMesh directory"
+    ],
+    "relevant_pages": [],
+    "relevant_sections": [
+      "5.3 Mesh generation with the blockMesh utility",
+      "5.4 Mesh conversion",
+      "5.1 Mesh description"
+    ]
+  },
+  {
+    "id": "R03",
+    "prompt": "Write a comprehensive report on boundary conditions in OpenFOAM, covering patch types, the difference between wall and patch, empty and wedge patches for 2D cases, cyclic boundaries and jump conditions, fixedFluxPressure, and traction boundary conditions.",
+    "type": "report",
+    "expected_sections": [
+      "Patch Types Overview",
+      "Wall vs Patch",
+      "Empty and Wedge Patches",
+      "Cyclic Boundaries and Jump Conditions",
+      "fixedFluxPressure",
+      "Traction Boundary Condition"
+    ],
+    "must_include_facts": [
+      "The empty patch type is used for directions in which no solution is required in 2D cases",
+      "The wedge patch type is used for 2D axisymmetric simulations with a wedge-shaped geometry",
+      "Wall boundaries apply no-slip conditions by default for velocity",
+      "A patch is a generic boundary type that does not contain geometric or topological information",
+      "Jump conditions at cyclic boundaries can specify a pressure drop across the interface",
+      "fixedFluxPressure adjusts the pressure gradient to match the velocity flux at the boundary",
+      "Traction boundary condition specifies stress components on the boundary for solid mechanics"
+    ],
+    "relevant_pages": [],
+    "relevant_sections": [
+      "5.2 Boundaries",
+      "5.2.1 Primitive type",
+      "5.2.2 Derived types"
+    ]
+  },
+  {
+    "id": "R04",
+    "prompt": "Write a technical report on solution algorithms in OpenFOAM, comparing SIMPLE and PIMPLE for pressure-velocity coupling, describing the fvSolution dictionary structure, under-relaxation factors, and linear solver configuration.",
+    "type": "report",
+    "expected_sections": [
+      "SIMPLE Algorithm",
+      "PIMPLE Algorithm",
+      "Comparison of SIMPLE and PIMPLE",
+      "fvSolution Structure",
+      "Under-Relaxation",
+      "Linear Solver Configuration"
+    ],
+    "must_include_facts": [
+      "SIMPLE is a steady-state pressure-velocity coupling algorithm",
+      "PIMPLE combines PISO and SIMPLE for transient simulations with outer correction loops",
+      "Under-relaxation factors in fvSolution control how aggressively fields are updated each iteration",
+      "The solvers sub-dictionary in fvSolution specifies the linear solver for each field variable",
+      "fvSolution is located in the system directory"
+    ],
+    "relevant_pages": [],
+    "relevant_sections": [
+      "4.5 Solution and algorithm control",
+      "4.5.1 Linear solver control",
+      "4.5.2 Solution under-relaxation",
+      "4.5.3 PISO and SIMPLE algorithms"
+    ]
+  },
+  {
+    "id": "R05",
+    "prompt": "Write a technical report on parallel execution and reconstruction in OpenFOAM, covering domain decomposition methods, running applications with MPI, the reconstructPar and reconstructParMesh utilities, and post-processing decomposed cases.",
+    "type": "report",
+    "expected_sections": [
+      "Domain Decomposition",
+      "Running with MPI",
+      "reconstructPar",
+      "reconstructParMesh",
+      "Post-processing Decomposed Cases"
+    ],
+    "must_include_facts": [
+      "decomposePar divides the mesh and fields across processor directories",
+      "mpirun -np <N> is used to launch parallel OpenFOAM applications",
+      "reconstructPar reassembles decomposed time directories into the original case structure",
+      "reconstructParMesh reconstructs only the mesh without field data",
+      "Individual processor directories can be post-processed independently without reconstruction"
+    ],
+    "relevant_pages": [],
+    "relevant_sections": [
+      "3.4 Running applications in parallel",
+      "3.4.1 Decomposition of mesh and initial field data",
+      "3.4.2 Running a decomposed case",
+      "3.4.3 Post-processing parallel processed cases"
+    ]
+  },
+  {
+    "id": "R06",
+    "prompt": "Write a technical report on post-processing and data extraction in OpenFOAM, covering the sampling library, probes, the foamPostProcess utility, available sampling types, and graph/line data extraction.",
+    "type": "report",
+    "expected_sections": [
+      "Sampling Library",
+      "Probes",
+      "foamPostProcess",
+      "Available Sampling Types",
+      "Graph and Line Data"
+    ],
+    "must_include_facts": [
+      "The sampling library extracts field data at specified locations during or after simulation",
+      "Probes record field values at specified point locations over time",
+      "foamPostProcess executes function objects on existing case data without re-running the solver",
+      "Sampling types include uniform, face, midPoint, and points",
+      "Graph data can be extracted along lines or curves for plotting"
+    ],
+    "relevant_pages": [],
+    "relevant_sections": [
+      "6.2 Sampling and monitoring data",
+      "6.2.1 Probes",
+      "6.2.2 Sampling on sets and surfaces",
+      "6.3 Post-processing command line interface"
+    ]
+  },
+  {
+    "id": "R07",
+    "prompt": "Write a technical report on tensor mathematics and field operations in OpenFOAM, covering the tensor rank system, scalar/vector/tensor fields, gradient/divergence/Laplacian operators in the C++ API, and the volField template class.",
+    "type": "report",
+    "expected_sections": [
+      "Tensor Rank System",
+      "Scalar Vector and Tensor Fields",
+      "Gradient Divergence and Laplacian Operators",
+      "volField Template"
+    ],
+    "must_include_facts": [
+      "OpenFOAM represents tensors from rank 0 (scalar) through rank 3",
+      "A symmetric rank 2 tensor has 6 independent components",
+      "The fvc namespace provides explicit finite volume calculus operations like gradient and divergence",
+      "volScalarField and volVectorField are typedefs of GeometricField templated on the mesh type",
+      "The gradient operator maps a scalar field to a vector field"
+    ],
+    "relevant_pages": [],
+    "relevant_sections": [
+      "1.2 Scalars, vectors and tensors",
+      "1.3 Tensor mathematics",
+      "2.3 Equation discretisation",
+      "2.4 The OpenFOAM library"
+    ]
+  },
+  {
+    "id": "R08",
+    "prompt": "Write a technical report on OpenFOAM case structure and runtime configuration, covering the case directory layout, controlDict parameters, runtime modifiable dictionaries, library loading, dictionary keyword lookup, file format conventions, and solver output interpretation.",
+    "type": "report",
+    "expected_sections": [
+      "Case Directory Structure",
+      "controlDict Configuration",
+      "Runtime Modifiable Dictionaries",
+      "Library Loading",
+      "Dictionary Lookup",
+      "File Format",
+      "Solver Output"
+    ],
+    "must_include_facts": [
+      "An OpenFOAM case has three required directories: 0 (initial conditions), constant, and system",
+      "controlDict specifies start/end time, time step, write interval, and output format",
+      "runTimeModifiable allows dictionaries to be re-read during a simulation without restarting",
+      "The libs entry in controlDict loads additional shared libraries at runtime",
+      "OpenFOAM defaults to ASCII file format for data files",
+      "Ux_0 and UxFinalRes represent initial and final residuals for velocity field solving"
+    ],
+    "relevant_pages": [],
+    "relevant_sections": [
+      "4.1 File structure of OpenFOAM cases",
+      "4.2 Basic input/output file format",
+      "4.3 Time and data input/output control"
+    ]
+  },
+  {
+    "id": "R09",
+    "prompt": "Write a technical report on multiphase and specialized solvers in OpenFOAM, covering the Volume of Fluid method, VoFSolver base class, interface capturing, the setFields utility for initialization, and combustion utilities.",
+    "type": "report",
+    "expected_sections": [
+      "Volume of Fluid Method",
+      "VoFSolver",
+      "Interface Capturing",
+      "setFields Initialization",
+      "Combustion Utilities"
+    ],
+    "must_include_facts": [
+      "The Volume of Fluid method uses a scalar indicator field (alpha) ranging from 0 to 1",
+      "VoFSolver serves as the base class for solvers handling immiscible fluid interfaces",
+      "Interface capturing reconstructs the sharp interface from the smooth alpha field",
+      "setFields initializes fields based on geometric regions defined via topoSetSource",
+      "equilibriumFlameT calculates equilibrium flame temperatures for combustion cases"
+    ],
+    "relevant_pages": [],
+    "relevant_sections": [
+      "3.5 Standard solvers",
+      "7.1 Models and physical properties"
+    ]
+  },
+  {
+    "id": "R10",
+    "prompt": "Write a technical report on the OpenFOAM build system and source code organization, covering the wmake build system, the difference between exe and libso compilation, header file conventions, the project directory structure, SI units, and the Courant number.",
+    "type": "report",
+    "expected_sections": [
+      "wmake Build System",
+      "exe vs libso Compilation",
+      "Header File Conventions",
+      "Project Directory Structure",
+      "SI Units",
+      "Courant Number"
+    ],
+    "must_include_facts": [
+      "wmake is the standard compilation tool for OpenFOAM applications and libraries",
+      "exe compiles an executable binary while libso compiles a shared library (.so file)",
+      ".H header files contain class declarations and are included by .C source files",
+      "The WM_PROJECT_DIR environment variable points to the OpenFOAM installation directory",
+      "OpenFOAM uses SI base units: kilogram, metre, second, Kelvin, mole, ampere, candela",
+      "The Courant number Co = delta_t * |U| / delta_x must remain below 1 for explicit time stepping"
+    ],
+    "relevant_pages": [],
+    "relevant_sections": [
+      "3.2 Compiling applications and libraries",
+      "3.2.1 Header .H files",
+      "3.2.2 Compiling with wmake",
+      "3.1 The OpenFOAM directory structure",
+      "4.2.6 Dimensional units"
+    ]
+  }
+]
