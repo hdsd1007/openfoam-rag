@@ -21,4 +21,10 @@ __pycache__/
 
 # Environment files
 .env
+.env.*
+backend/.env
 venv/
+
+# Evaluation results
+eval_results/
+query_outputs/
