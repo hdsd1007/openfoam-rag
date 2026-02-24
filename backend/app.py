@@ -40,10 +40,8 @@ _semaphore = asyncio.Semaphore(2)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: warm up embedding model
-    get_model()
+    # Model loads lazily on first request to keep startup fast
     yield
-    # Shutdown: nothing to clean up
 
 
 app = FastAPI(title="OpenFOAM RAG API", lifespan=lifespan)
