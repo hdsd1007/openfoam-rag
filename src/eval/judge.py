@@ -313,10 +313,7 @@ REPORT:
         chain = prompt | llm
         ai_message = chain.invoke(invoke_args)
         raw_output = ai_message.content
-        usage = ai_message.response_metadata.get("usage_metadata")
-        if usage is None and hasattr(ai_message, "usage_metadata"):
-            usage = ai_message.usage_metadata
-        tracker.track(track_tokens, usage)
+        tracker.track(track_tokens, ai_message.usage_metadata)
     else:
         chain = prompt | llm | StrOutputParser()
         raw_output = chain.invoke(invoke_args)

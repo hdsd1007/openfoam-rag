@@ -17,26 +17,28 @@ class TokenTracker:
 
         Args:
             label: String identifier, e.g. "R01_report_generate".
-            usage_metadata: Dict from AIMessage.response_metadata["usage_metadata"]
-                            or similar. Expected keys vary by provider; we
-                            extract what's available.
+            usage_metadata: Dict-like object from AIMessage.usage_metadata.
+                            LangChain Gemini format:
+                              input_tokens, output_tokens (includes thinking),
+                              total_tokens, output_token_details.reasoning
         """
         if usage_metadata is None:
             return
 
-        input_tokens = (
-            usage_metadata.get("input_tokens")
-            or usage_metadata.get("prompt_token_count")
-            or usage_metadata.get("prompt_tokens", 0)
-        )
-        output_tokens = (
-            usage_metadata.get("output_tokens")
-            or usage_metadata.get("candidates_token_count")
-            or usage_metadata.get("completion_tokens", 0)
-        )
-        thinking_tokens = (
-            usage_metadata.get("thoughts_token_count", 0)
-        )
+        # Support both dict and dict-like objects
+        meta = dict(usage_metadata) if not isinstance(usage_metadata, dict) else usage_metadata
+
+        input_tokens = meta.get("input_tokens", 0)
+
+        # output_tokens from Gemini includes thinking; separate them
+        raw_output = meta.get("output_tokens", 0)
+        details = meta.get("output_token_details") or {}
+        if isinstance(details, dict):
+            thinking_tokens = details.get("reasoning", 0)
+        else:
+            thinking_tokens = getattr(details, "reasoning", 0) or 0
+        output_tokens = raw_output - thinking_tokens
+
         total = input_tokens + output_tokens + thinking_tokens
 
         self._entries.append({

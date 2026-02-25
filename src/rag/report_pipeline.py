@@ -43,10 +43,7 @@ Report topic: {prompt}"""
         chain = chat_prompt | llm
         ai_message = chain.invoke({"prompt": prompt})
         raw_output = ai_message.content
-        usage = ai_message.response_metadata.get("usage_metadata")
-        if usage is None and hasattr(ai_message, "usage_metadata"):
-            usage = ai_message.usage_metadata
-        tracker.track(track_tokens, usage)
+        tracker.track(track_tokens, ai_message.usage_metadata)
     else:
         chain = chat_prompt | llm | StrOutputParser()
         raw_output = chain.invoke({"prompt": prompt})
@@ -193,10 +190,7 @@ REPORT TOPIC:
         chain = chat_prompt | llm
         ai_message = chain.invoke(invoke_args)
         report = ai_message.content
-        usage = ai_message.response_metadata.get("usage_metadata")
-        if usage is None and hasattr(ai_message, "usage_metadata"):
-            usage = ai_message.usage_metadata
-        tracker.track(track_tokens, usage)
+        tracker.track(track_tokens, ai_message.usage_metadata)
     else:
         chain = chat_prompt | llm | StrOutputParser()
         report = chain.invoke(invoke_args)
