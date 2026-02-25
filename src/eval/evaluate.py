@@ -41,15 +41,18 @@ def load_golden_set():
 
 
 def extract_pages_from_chunks(chunks):
-    """Extract ordered list of page numbers from chunk data."""
+    """Extract ordered list of source:page identifiers from chunk data.
+
+    Returns strings like 'UserGuide.pdf:75' to disambiguate pages
+    across different PDFs. Matches the format used in golden_set.json
+    relevant_pages.
+    """
     pages = []
     for chunk in chunks:
         page = chunk.get('page')
+        source = chunk.get('source', 'Unknown')
         if page and page != 'N/A':
-            try:
-                pages.append(int(page))
-            except (ValueError, TypeError):
-                pass
+            pages.append(f"{source}:{page}")
     return pages
 
 

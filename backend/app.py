@@ -24,7 +24,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 
 from embedder import get_model, embed_query
-from supabase_client import search_chunks
+from supabase_client import search_chunks, insert_feedback, fetch_feedback
 from reranker import rerank_chunks
 
 load_dotenv()
@@ -55,8 +55,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type"],
 )
 
 # ---------------------------------------------------------------------------
@@ -207,6 +207,14 @@ class ReportRequest(BaseModel):
     api_key: str | None = None
     k_per_query: int = Field(default=10, ge=1, le=50)
     max_chunks: int = Field(default=20, ge=1, le=50)
+
+
+class FeedbackRequest(BaseModel):
+    query: str
+    answer_text: str = Field(max_length=50000)
+    mode: str = Field(default="quick", pattern="^(quick|detailed)$")
+    vote: str = Field(pattern="^(up|down)$")
+    comment: str | None = Field(default=None, max_length=1000)
 
 
 class ChunkResponse(BaseModel):
@@ -388,6 +396,42 @@ async def report_endpoint(req: ReportRequest):
             yield _sse_event("error", {"message": str(e)})
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+@app.post("/api/feedback")
+async def feedback_endpoint(req: FeedbackRequest):
+    """Store anonymous answer feedback."""
+    answer_hash = hashlib.md5(req.answer_text.encode()).hexdigest()
+    result = await asyncio.to_thread(
+        insert_feedback,
+        query=req.query,
+        answer_hash=answer_hash,
+        mode=req.mode,
+        vote=req.vote,
+        comment=req.comment,
+        answer_text=req.answer_text,
+    )
+    return {"status": "ok", "id": result.get("id")}
+
+
+@app.get("/api/feedback/summary")
+async def feedback_summary():
+    """Return aggregate feedback stats."""
+    rows = await asyncio.to_thread(fetch_feedback)
+    total = len(rows)
+    upvotes = sum(1 for r in rows if r["vote"] == "up")
+    downvotes = sum(1 for r in rows if r["vote"] == "down")
+    by_mode: dict[str, int] = {}
+    for r in rows:
+        mode = r.get("mode", "quick")
+        by_mode[mode] = by_mode.get(mode, 0) + 1
+    return {
+        "total": total,
+        "upvotes": upvotes,
+        "downvotes": downvotes,
+        "ratio": round(upvotes / downvotes, 2) if downvotes > 0 else None,
+        "by_mode": by_mode,
+    }
 
 
 # ---------------------------------------------------------------------------
