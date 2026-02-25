@@ -1,3 +1,4 @@
+import re
 import json
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
@@ -132,7 +133,53 @@ def _clean_json_output(raw_output):
     return cleaned.strip()
 
 
-def judge_report(question, report, context, reference_checklist, llm):
+# Weights used for programmatic overall_score
+_REPORT_WEIGHTS = {
+    "groundedness": 0.25,
+    "technical_accuracy": 0.20,
+    "citation_correctness": 0.15,
+    "coverage": 0.20,
+    "factual_recall": 0.10,
+    "structure": 0.10,
+}
+
+
+def _extract_scores_from_partial(raw_text):
+    """Regex fallback to extract scores from truncated JSON.
+
+    Returns a result dict with scores and overall_score if at least 4 of 6
+    scores are found, otherwise returns None.
+    """
+    score_fields = [
+        "groundedness", "technical_accuracy", "citation_correctness",
+        "coverage", "factual_recall", "structure",
+    ]
+    extracted = {}
+    for field in score_fields:
+        match = re.search(rf'"{field}"\s*:\s*(\d)', raw_text)
+        if match:
+            extracted[field] = int(match.group(1))
+
+    if len(extracted) < 4:
+        return None
+
+    # Compute weighted overall from available scores
+    weighted_sum = sum(extracted[d] * _REPORT_WEIGHTS[d] for d in extracted)
+    weight_sum = sum(_REPORT_WEIGHTS[d] for d in extracted)
+    overall = round(weighted_sum / weight_sum, 2) if weight_sum else 0.0
+
+    # Fill missing scores with None for transparency
+    result = {}
+    for field in score_fields:
+        result[field] = extracted.get(field)
+    result["overall_score"] = overall
+    result["reasoning"] = "(partial — extracted via regex fallback from truncated output)"
+    result["_partial"] = True
+    return result
+
+
+def judge_report(question, report, context, reference_checklist, llm,
+                  track_tokens=None):
     """
     Evaluate a generated report against a reference checklist using 6 dimensions.
 
@@ -150,10 +197,12 @@ def judge_report(question, report, context, reference_checklist, llm):
         context: List of LangChain Document objects used as context.
         reference_checklist: Dict with 'expected_sections' and 'must_include_facts'.
         llm: LangChain-compatible LLM for judging.
+        track_tokens: Optional string label. When set, records token usage via
+                      the global TokenTracker instead of using StrOutputParser.
 
     Returns:
         Dict with per-dimension scores, overall_score (weighted average),
-        sections_found/missing, facts_found/missing, and reasoning.
+        and reasoning.
     """
     formatted_context = format_context_with_metadata(context)
 
@@ -227,7 +276,8 @@ STRICT RULES:
 - Do not give 5 on Coverage unless ALL expected sections are present with real content.
 - Do not give 5 on Factual Recall unless ALL must-include facts are present.
 
-Return ONLY valid JSON (no markdown, no explanations):
+Return ONLY valid JSON (no markdown, no explanations).
+Put the six integer scores FIRST, then reasoning LAST:
 
 {{
   "groundedness": int,
@@ -236,10 +286,6 @@ Return ONLY valid JSON (no markdown, no explanations):
   "coverage": int,
   "factual_recall": int,
   "structure": int,
-  "sections_found": ["list of expected sections that ARE present"],
-  "sections_missing": ["list of expected sections that are NOT present"],
-  "facts_found": ["list of must-include facts that ARE present"],
-  "facts_missing": ["list of must-include facts that are NOT present"],
   "reasoning": "brief but specific justification mentioning concrete issues"
 }}
 
@@ -253,15 +299,27 @@ REPORT:
 {report}"""
 
     prompt = ChatPromptTemplate.from_template(template)
-    chain = prompt | llm | StrOutputParser()
 
-    raw_output = chain.invoke({
+    invoke_args = {
         "context": formatted_context,
         "question": question,
         "report": report,
         "sections_list": sections_list,
         "facts_list": facts_list,
-    })
+    }
+
+    if track_tokens:
+        from src.llm.token_tracker import tracker
+        chain = prompt | llm
+        ai_message = chain.invoke(invoke_args)
+        raw_output = ai_message.content
+        usage = ai_message.response_metadata.get("usage_metadata")
+        if usage is None and hasattr(ai_message, "usage_metadata"):
+            usage = ai_message.usage_metadata
+        tracker.track(track_tokens, usage)
+    else:
+        chain = prompt | llm | StrOutputParser()
+        raw_output = chain.invoke(invoke_args)
 
     cleaned_output = _clean_json_output(raw_output)
 
@@ -281,26 +339,17 @@ REPORT:
             }
 
         # Compute overall_score programmatically (weighted average)
-        weights = {
-            "groundedness": 0.25,
-            "technical_accuracy": 0.20,
-            "citation_correctness": 0.15,
-            "coverage": 0.20,
-            "factual_recall": 0.10,
-            "structure": 0.10,
-        }
         result["overall_score"] = round(
-            sum(result[dim] * w for dim, w in weights.items()), 2
+            sum(result[dim] * w for dim, w in _REPORT_WEIGHTS.items()), 2
         )
-
-        # Ensure list fields exist even if LLM omitted them
-        for field in ["sections_found", "sections_missing", "facts_found", "facts_missing"]:
-            if field not in result:
-                result[field] = []
 
         return result
 
     except json.JSONDecodeError as e:
+        # Try regex fallback for truncated JSON
+        partial = _extract_scores_from_partial(cleaned_output)
+        if partial is not None:
+            return partial
         return {
             "error": "Invalid JSON from judge",
             "json_error": str(e),

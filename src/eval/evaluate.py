@@ -24,6 +24,7 @@ from datetime import datetime
 from src.vectorstore.load_db import load_vector_db
 from src.llm.load_judge_llm import load_judge_llm
 from src.llm.load_generator_llm import load_generator_llm
+from src.llm.token_tracker import tracker
 from src.rag.pipeline_e2e import ask_openfoam, format_context_with_metadata
 from src.rag.report_pipeline import run_report_pipeline, generate_report
 from src.eval.judge import judge_answer, judge_report
@@ -67,8 +68,11 @@ def evaluate_report(entry, vector_db, generator_llm, judge_llm, reranker):
 
     print(f"\n  [{entry_id}] Generating report...")
 
-    # Run report pipeline
-    result = run_report_pipeline(prompt, vector_db, generator_llm, reranker)
+    # Run report pipeline (with token tracking)
+    result = run_report_pipeline(
+        prompt, vector_db, generator_llm, reranker,
+        track_tokens_prefix=f"{entry_id}_report",
+    )
 
     # Build context docs for judging (reconstruct Document-like objects)
     from langchain_core.documents import Document
@@ -87,7 +91,7 @@ def evaluate_report(entry, vector_db, generator_llm, judge_llm, reranker):
         )
         context_docs.append(doc)
 
-    # Judge the report
+    # Judge the report (with token tracking)
     print(f"  [{entry_id}] Judging report...")
     reference_checklist = {
         "expected_sections": entry.get("expected_sections", []),
@@ -99,6 +103,7 @@ def evaluate_report(entry, vector_db, generator_llm, judge_llm, reranker):
         context=context_docs,
         reference_checklist=reference_checklist,
         llm=judge_llm,
+        track_tokens=f"{entry_id}_report_judge",
     )
 
     # Compute retrieval metrics (if relevant_pages available)
@@ -170,11 +175,14 @@ def evaluate_baseline(entry, vector_db, generator_llm, judge_llm, reranker,
                         key=lambda x: x.metadata['rerank_score'],
                         reverse=True)[:top_n]
 
-    # Generate report using the SAME prompt template as report mode
+    # Generate report using the SAME prompt template as report mode (with token tracking)
     print(f"  [{entry_id}] Generating baseline report ({len(final_docs)} chunks)...")
-    report = generate_report(prompt, final_docs, generator_llm)
+    report = generate_report(
+        prompt, final_docs, generator_llm,
+        track_tokens=f"{entry_id}_baseline_generate",
+    )
 
-    # Judge with the SAME 6-dim judge as report mode
+    # Judge with the SAME 6-dim judge as report mode (with token tracking)
     print(f"  [{entry_id}] Judging baseline...")
     reference_checklist = {
         "expected_sections": entry.get("expected_sections", []),
@@ -186,6 +194,7 @@ def evaluate_baseline(entry, vector_db, generator_llm, judge_llm, reranker,
         context=final_docs,
         reference_checklist=reference_checklist,
         llm=judge_llm,
+        track_tokens=f"{entry_id}_baseline_judge",
     )
 
     # Build chunk data
@@ -226,13 +235,15 @@ def evaluate_baseline(entry, vector_db, generator_llm, judge_llm, reranker,
     }
 
 
-def evaluate_parser(parser_name, run_baseline=False):
+def evaluate_parser(parser_name, run_baseline=False, start=None, end=None):
     """
-    Run full evaluation on all golden set entries.
+    Run full evaluation on golden set entries.
 
     Args:
         parser_name: Which parser's vector DB to use.
         run_baseline: If True, also run single-query baseline for comparison.
+        start: 1-indexed start position (inclusive). None = from beginning.
+        end: 1-indexed end position (inclusive). None = to end.
 
     Returns:
         List of evaluation result dicts.
@@ -241,12 +252,21 @@ def evaluate_parser(parser_name, run_baseline=False):
     golden_set = load_golden_set()
     print(f"Loaded {len(golden_set)} report prompts")
 
+    # Slice the golden set if start/end specified
+    if start is not None or end is not None:
+        s = (start - 1) if start else 0
+        e = end if end else len(golden_set)
+        golden_set = golden_set[s:e]
+        print(f"Running subset: entries {s+1} to {s+len(golden_set)} "
+              f"({len(golden_set)} prompts)")
+
     print(f"\nLoading resources for parser: {parser_name}")
     vector_db = load_vector_db(parser_name)
     generator_llm = load_generator_llm(max_tokens=8192)
     judge_llm = load_judge_llm()
     reranker = CrossEncoder('BAAI/bge-reranker-base', device='cpu')
 
+    tracker.reset()
     results = []
 
     for entry in golden_set:
@@ -277,9 +297,47 @@ def evaluate_parser(parser_name, run_baseline=False):
             )
             entry_result["baseline"] = baseline_result
 
+        # Token usage for this entry
+        entry_tokens = tracker.sum_for_prefix(entry_id)
+        entry_result["token_usage"] = entry_tokens
+        _t = entry_tokens
+        print(f"  [{entry_id}] Tokens: {_t['input_tokens']:,} in, "
+              f"{_t['output_tokens']:,} out, {_t['thinking_tokens']:,} think, "
+              f"{_t['total_tokens']:,} total ({_t['num_calls']} calls)")
+
         results.append(entry_result)
 
     return results
+
+
+def merge_results(file_paths, output_path):
+    """
+    Merge multiple partial evaluation result files into one.
+
+    Args:
+        file_paths: List of JSON file paths to merge.
+        output_path: Output file path for merged results.
+    """
+    merged = []
+    seen_ids = set()
+
+    for fp in file_paths:
+        with open(fp, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        for entry in data:
+            if entry["id"] not in seen_ids:
+                merged.append(entry)
+                seen_ids.add(entry["id"])
+            else:
+                print(f"  Warning: duplicate {entry['id']} in {fp}, skipping")
+
+    # Sort by ID to maintain R01-R10 order
+    merged.sort(key=lambda x: x["id"])
+
+    with open(output_path, "w", encoding="utf-8") as f:
+        json.dump(merged, f, indent=2, ensure_ascii=False)
+
+    print(f"Merged {len(merged)} entries from {len(file_paths)} files → {output_path}")
 
 
 def main():
@@ -296,15 +354,44 @@ def main():
         action="store_true",
         help="Also run single-query baseline for side-by-side comparison",
     )
+    parser.add_argument(
+        "--start", type=int, default=None,
+        help="1-indexed start position (inclusive), e.g. --start 1 for R01",
+    )
+    parser.add_argument(
+        "--end", type=int, default=None,
+        help="1-indexed end position (inclusive), e.g. --end 5 for R05",
+    )
+    parser.add_argument(
+        "--merge", nargs="+", default=None,
+        help="Merge multiple partial result files, e.g. --merge part1.json part2.json",
+    )
     args = parser.parse_args()
 
-    results = evaluate_parser(args.parser, run_baseline=args.baseline)
+    # Merge mode: combine partial results and exit
+    if args.merge:
+        output_path = Path("eval_results")
+        output_path.mkdir(exist_ok=True)
+        merged_path = output_path / f"{args.parser}_report_evaluation.json"
+        merge_results(args.merge, merged_path)
+        return
 
-    # Save results
+    results = evaluate_parser(
+        args.parser, run_baseline=args.baseline,
+        start=args.start, end=args.end,
+    )
+
+    # Save results — include range in filename for partial runs
     output_path = Path("eval_results")
     output_path.mkdir(exist_ok=True)
 
-    file_path = output_path / f"{args.parser}_report_evaluation.json"
+    if args.start is not None or args.end is not None:
+        s = args.start or 1
+        e = args.end or 10
+        file_path = output_path / f"{args.parser}_report_evaluation_R{s:02d}-R{e:02d}.json"
+    else:
+        file_path = output_path / f"{args.parser}_report_evaluation.json"
+
     with open(file_path, "w", encoding="utf-8") as f:
         json.dump(results, f, indent=2, ensure_ascii=False)
 
@@ -339,6 +426,15 @@ def main():
             print(f"  Successful judges: {len(baseline_scores)}/{len(results)}")
             print(f"  Avg overall score: {avg_baseline:.2f}")
 
+    # Overall token usage summary
+    total = tracker.get_summary()
+    if total["num_calls"] > 0:
+        print(f"\nToken Usage Summary ({total['num_calls']} LLM calls):")
+        print(f"  Input:    {total['input_tokens']:,}")
+        print(f"  Output:   {total['output_tokens']:,}")
+        print(f"  Thinking: {total['thinking_tokens']:,}")
+        print(f"  Total:    {total['total_tokens']:,}")
+
 
 if __name__ == "__main__":
     main()
@@ -346,3 +442,6 @@ if __name__ == "__main__":
 # TO RUN EVALUATION USE THE FOLLOWING SCRIPT
 # python -m src.eval.evaluate --parser marker
 # python -m src.eval.evaluate --parser marker --baseline
+# python -m src.eval.evaluate --parser marker --baseline --start 1 --end 5
+# python -m src.eval.evaluate --parser marker --baseline --start 6 --end 10
+# python -m src.eval.evaluate --parser marker --merge eval_results/marker_report_evaluation_R01-R05.json eval_results/marker_report_evaluation_R06-R10.json

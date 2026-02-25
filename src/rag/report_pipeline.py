@@ -12,13 +12,14 @@ from langchain_core.output_parsers import StrOutputParser
 from src.rag.pipeline_e2e import format_context_with_metadata
 
 
-def decompose_query(prompt, llm):
+def decompose_query(prompt, llm, track_tokens=None):
     """
     Break a report-level prompt into 3-5 focused sub-questions using LLM.
 
     Args:
         prompt: The report topic/prompt.
         llm: LangChain-compatible LLM instance.
+        track_tokens: Optional string label for token tracking.
 
     Returns:
         List of sub-question strings.
@@ -36,9 +37,19 @@ Example:
 Report topic: {prompt}"""
 
     chat_prompt = ChatPromptTemplate.from_template(template)
-    chain = chat_prompt | llm | StrOutputParser()
 
-    raw_output = chain.invoke({"prompt": prompt})
+    if track_tokens:
+        from src.llm.token_tracker import tracker
+        chain = chat_prompt | llm
+        ai_message = chain.invoke({"prompt": prompt})
+        raw_output = ai_message.content
+        usage = ai_message.response_metadata.get("usage_metadata")
+        if usage is None and hasattr(ai_message, "usage_metadata"):
+            usage = ai_message.usage_metadata
+        tracker.track(track_tokens, usage)
+    else:
+        chain = chat_prompt | llm | StrOutputParser()
+        raw_output = chain.invoke({"prompt": prompt})
 
     # Clean potential markdown fences
     cleaned = raw_output.strip()
@@ -126,7 +137,7 @@ def retrieve_for_report(sub_questions, vector_db, reranker,
     return merged_docs, metadata
 
 
-def generate_report(prompt, merged_docs, llm):
+def generate_report(prompt, merged_docs, llm, track_tokens=None):
     """
     Generate a structured report from merged retrieved chunks.
 
@@ -134,6 +145,7 @@ def generate_report(prompt, merged_docs, llm):
         prompt: Original report prompt.
         merged_docs: List of LangChain Document objects (deduplicated, reranked).
         llm: LangChain-compatible LLM instance.
+        track_tokens: Optional string label for token tracking.
 
     Returns:
         Report string with ## sections and [n] citations.
@@ -174,19 +186,27 @@ REPORT TOPIC:
 {prompt}"""
 
     chat_prompt = ChatPromptTemplate.from_template(template)
-    chain = chat_prompt | llm | StrOutputParser()
+    invoke_args = {"context": formatted_context, "prompt": prompt}
 
-    report = chain.invoke({
-        "context": formatted_context,
-        "prompt": prompt,
-    })
+    if track_tokens:
+        from src.llm.token_tracker import tracker
+        chain = chat_prompt | llm
+        ai_message = chain.invoke(invoke_args)
+        report = ai_message.content
+        usage = ai_message.response_metadata.get("usage_metadata")
+        if usage is None and hasattr(ai_message, "usage_metadata"):
+            usage = ai_message.usage_metadata
+        tracker.track(track_tokens, usage)
+    else:
+        chain = chat_prompt | llm | StrOutputParser()
+        report = chain.invoke(invoke_args)
 
     return report
 
 
 def run_report_pipeline(prompt, vector_db, llm, reranker,
                         k_per_query=15, top_n_per_query=5,
-                        max_unique_chunks=20):
+                        max_unique_chunks=20, track_tokens_prefix=None):
     """
     End-to-end report generation: decompose -> retrieve -> generate.
 
@@ -198,12 +218,16 @@ def run_report_pipeline(prompt, vector_db, llm, reranker,
         k_per_query: Chunks to retrieve per sub-question (default 15).
         top_n_per_query: Chunks to keep after reranking per sub-question (default 5).
         max_unique_chunks: Max total unique chunks after dedup (default 20).
+        track_tokens_prefix: Optional prefix string for token tracking labels.
+                             When set, passes "{prefix}_decompose" and
+                             "{prefix}_generate" to sub-functions.
 
     Returns:
         Dict with report, sub_questions, chunks, and retrieval_metadata.
     """
     # Step 1: Decompose prompt into sub-questions
-    sub_questions = decompose_query(prompt, llm)
+    decompose_label = f"{track_tokens_prefix}_decompose" if track_tokens_prefix else None
+    sub_questions = decompose_query(prompt, llm, track_tokens=decompose_label)
 
     # Step 2: Multi-retrieval with deduplication
     merged_docs, retrieval_metadata = retrieve_for_report(
@@ -214,7 +238,8 @@ def run_report_pipeline(prompt, vector_db, llm, reranker,
     )
 
     # Step 3: Generate structured report
-    report = generate_report(prompt, merged_docs, llm)
+    generate_label = f"{track_tokens_prefix}_generate" if track_tokens_prefix else None
+    report = generate_report(prompt, merged_docs, llm, track_tokens=generate_label)
 
     # Build chunk data for output
     chunks = []
