@@ -25,7 +25,7 @@ from src.vectorstore.load_db import load_vector_db
 from src.llm.load_judge_llm import load_judge_llm
 from src.llm.load_generator_llm import load_generator_llm
 from src.rag.pipeline_e2e import ask_openfoam, format_context_with_metadata
-from src.rag.report_pipeline import run_report_pipeline
+from src.rag.report_pipeline import run_report_pipeline, generate_report
 from src.eval.judge import judge_answer, judge_report
 from src.eval.retrieval_metrics import compute_all_retrieval_metrics
 from sentence_transformers import CrossEncoder
@@ -127,33 +127,70 @@ def evaluate_report(entry, vector_db, generator_llm, judge_llm, reranker):
     }
 
 
-def evaluate_baseline(entry, vector_db, generator_llm, judge_llm, reranker):
+def evaluate_baseline(entry, vector_db, generator_llm, judge_llm, reranker,
+                      k_dense=35, top_n=20):
     """
     Run single-query baseline and evaluate a golden set entry.
 
-    Returns dict with baseline answer and evaluation scores.
+    Fair comparison with report mode: same chunk budget (top_n=20),
+    same max_tokens (8192), same report prompt, same 6-dim judge.
+    Only difference: single-query retrieval vs decomposed multi-retrieval.
+
+    Args:
+        entry: Golden set entry dict.
+        vector_db: ChromaDB vector store.
+        generator_llm: LLM for report generation (max_tokens=8192).
+        judge_llm: LLM for judging.
+        reranker: CrossEncoder reranker.
+        k_dense: Number of chunks for dense retrieval (default 35).
+        top_n: Number of chunks after reranking (default 20, matches report mode).
     """
+    from langchain_core.documents import Document
+
     prompt = entry["prompt"]
     entry_id = entry["id"]
 
-    print(f"  [{entry_id}] Running baseline (single-query)...")
+    print(f"  [{entry_id}] Running baseline (single-query, k={k_dense}, top_n={top_n})...")
 
-    response, context_docs = ask_openfoam(
-        prompt, vector_db, generator_llm, reranker, return_context=True
-    )
+    # Stage 1: Dense retrieval — single query, higher k
+    docs_with_scores = vector_db.similarity_search_with_score(prompt, k=k_dense)
+    initial_docs = []
+    for doc, score in docs_with_scores:
+        doc.metadata['similarity_score'] = round(float(score), 4)
+        initial_docs.append(doc)
 
-    # Judge the answer using existing judge_answer
+    # Stage 2: Cross-encoder reranking
+    pairs = [[prompt, doc.page_content] for doc in initial_docs]
+    rerank_scores = reranker.predict(pairs)
+    for doc, score in zip(initial_docs, rerank_scores):
+        doc.metadata['rerank_score'] = round(float(score), 4)
+
+    # Take top_n after reranking (same chunk budget as report mode)
+    final_docs = sorted(initial_docs,
+                        key=lambda x: x.metadata['rerank_score'],
+                        reverse=True)[:top_n]
+
+    # Generate report using the SAME prompt template as report mode
+    print(f"  [{entry_id}] Generating baseline report ({len(final_docs)} chunks)...")
+    report = generate_report(prompt, final_docs, generator_llm)
+
+    # Judge with the SAME 6-dim judge as report mode
     print(f"  [{entry_id}] Judging baseline...")
-    baseline_judge = judge_answer(
+    reference_checklist = {
+        "expected_sections": entry.get("expected_sections", []),
+        "must_include_facts": entry.get("must_include_facts", []),
+    }
+    baseline_judge = judge_report(
         question=prompt,
-        answer=response,
-        context=context_docs,
+        report=report,
+        context=final_docs,
+        reference_checklist=reference_checklist,
         llm=judge_llm,
     )
 
     # Build chunk data
     chunks = []
-    for i, doc in enumerate(context_docs, 1):
+    for i, doc in enumerate(final_docs, 1):
         chunks.append({
             "rank": i,
             "section": doc.metadata.get('section', 'N/A'),
@@ -181,7 +218,7 @@ def evaluate_baseline(entry, vector_db, generator_llm, judge_llm, reranker):
         "id": entry_id,
         "prompt": prompt,
         "mode": "baseline",
-        "answer": response,
+        "report": report,
         "chunks": chunks,
         "evaluation": baseline_judge,
         "retrieval_metrics": retrieval_metrics,
@@ -207,7 +244,6 @@ def evaluate_parser(parser_name, run_baseline=False):
     print(f"\nLoading resources for parser: {parser_name}")
     vector_db = load_vector_db(parser_name)
     generator_llm = load_generator_llm(max_tokens=8192)
-    baseline_llm = load_generator_llm(max_tokens=2048) if run_baseline else None
     judge_llm = load_judge_llm()
     reranker = CrossEncoder('BAAI/bge-reranker-base', device='cpu')
 
@@ -233,9 +269,11 @@ def evaluate_parser(parser_name, run_baseline=False):
         }
 
         # Baseline evaluation (optional)
+        # Uses same LLM, same chunk budget (20), same prompt, same judge
+        # Only difference: single-query retrieval (k=35) vs decomposed multi-retrieval
         if run_baseline:
             baseline_result = evaluate_baseline(
-                entry, vector_db, baseline_llm, judge_llm, reranker
+                entry, vector_db, generator_llm, judge_llm, reranker
             )
             entry_result["baseline"] = baseline_result
 
