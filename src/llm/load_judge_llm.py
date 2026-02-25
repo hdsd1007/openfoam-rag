@@ -17,7 +17,7 @@ def load_judge_llm():
         )
     
     llm = ChatGoogleGenerativeAI(
-        model="gemini-2.5-pro",  # Stronger model than generator to avoid self-preference bias
+        model="gemini-2.5-flash",  # Stronger model than generator to avoid self-preference bias
         temperature=0.0,  # Deterministic for judging
         max_output_tokens=1024,  # Strict JSON output: scores + short lists + reasoning
         google_api_key=api_key
