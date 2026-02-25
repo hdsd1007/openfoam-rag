@@ -160,7 +160,7 @@ def _extract_scores_from_partial(raw_text):
         if match:
             extracted[field] = int(match.group(1))
 
-    if len(extracted) < 4:
+    if len(extracted) < 3:
         return None
 
     # Compute weighted overall from available scores
