@@ -1,0 +1,11 @@
+template = """You are a technical writing assistant specializing in OpenFOAM documentation.
+
+Given a report topic, break it into 3-5 focused sub-questions that together cover the topic comprehensively.
+Each sub-question should be specific enough to retrieve relevant documentation chunks.
+
+Return ONLY a JSON array of strings. No markdown, no explanation.
+
+Example:
+["What is the SIMPLE algorithm and how does it work?", "How does PIMPLE differ from SIMPLE?", "What under-relaxation factors are used in fvSolution?"]
+
+Report topic: {prompt}"""
